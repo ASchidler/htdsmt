@@ -10,6 +10,7 @@ import logging
 import ctypes
 import frasmt_solver
 import os
+import subprocess
 
 src_path = os.path.abspath(os.path.realpath(inspect.getfile(inspect.currentframe())))
 sys.path.insert(0, os.path.realpath(os.path.join(src_path, '..')))
@@ -23,27 +24,31 @@ if src_path not in sys.path:
         sys.path.insert(0, os.path.join(src_path, lib))
 
 from htd_validate import Hypergraph
-from fhtd import FractionalHypertreeDecomposer, utils
-from fhtd.utils import sha256_checksum
 
-if not select.select([sys.stdin,],[],[],0.0)[0]:
+# End of imports
+
+if not select.select([sys.stdin, ], [], [], 0.0)[0]:
     if len(sys.argv) == 2:
         hypergraph = Hypergraph.from_file(sys.argv[1], fischl_format=False)
     else:
-        print "Please provide the input via STDIN or as the first and only argument"
+        print "Please provide the input via STDIN or as a filename as the first and only argument"
         exit(1)
 else:
     hypergraph = Hypergraph.fromstream_dimacslike(sys.stdin)
 
 epsilon = Decimal(0.001)
-stream = StringIO()
-stream2 = open("test.txt", "w+")
 
-enc = frasmt_solver.FraSmtSolver(hypergraph, stream=stream2, checker_epsilon=epsilon)
+is_z3 = True
+p1 = subprocess.Popen('./optimathsat', stdin=subprocess.PIPE, stdout=subprocess.PIPE) if not is_z3 \
+    else subprocess.Popen(['./z3', '-smt2', '-in'], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+
+enc = frasmt_solver.FraSmtSolver(hypergraph, stream=p1.stdin, checker_epsilon=epsilon)
 enc.solve()
-stream2.close()
-is_z3 = False
-outp = os.popen('./z3 -smt2 test.txt').read() if is_z3 else os.popen('./optimathsat < test.txt').read()
+# send eof and wait for output
+outp, err = p1.communicate("")
+
+#outp = os.popen('./z3 -smt2 test.txt').read() if is_z3 else os.popen('./optimathsat < test.txt').read()
+
 res = enc.decode(outp, is_z3)
 
 try:
