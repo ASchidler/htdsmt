@@ -114,8 +114,11 @@ class FraSmtSolver:
                 weights.append("weight_{j}_e{e}".format(j=j, e=e))
 
             # set optimization variable or value for SAT check
-            self.stream.write(
-                "(assert ( <= (+ {weights}) {m}))\n".format(weights=" ".join(weights), m=m))
+            if len(weights) > 1:
+                self.stream.write(
+                    "(assert ( <= (+ {weights}) {m}))\n".format(weights=" ".join(weights), m=m))
+            elif len(weights) == 1:
+                self.stream.write("(assert (>= {} {}))\n".format(weights[0], m))
 
     def elimination_ordering(self, n):
         tord = lambda p, q: 'ord_{p}{q}'.format(p=p, q=q) if p < q \
@@ -179,16 +182,23 @@ class FraSmtSolver:
                 for e in self.hypergraph.incident_edges(j):
                     weights.append("weight_{i}_e{e}".format(i=i, e=e))
 
-                self.stream.write(
-                    "(assert (=> arc_{i}_{j} (>= (+ {weights}) 1)))\n".format(i=i, j=j, weights=" ".join(weights)))
+                if len(weights) > 1:
+                    self.stream.write(
+                        "(assert (=> arc_{i}_{j} (>= (+ {weights}) 1)))\n".format(i=i, j=j, weights=" ".join(weights)))
+                else:
+                    self.stream.write(
+                        "(assert (=> arc_{i}_{j} (>= {weights} 1)))\n".format(i=i, j=j, weights=weights[0]))
 
                 # arc_ij then i most be covered by some edge (because i will end up in one bag)
                 weights = []
                 for e in self.hypergraph.incident_edges(i):
                     weights.append("weight_{i}_e{e}".format(i=i, e=e))
 
-                self.stream.write(
-                    "(assert (>= (+ {weights}) 1))\n".format(weights=" ".join(weights)))
+                if len(weights) > 1:
+                    self.stream.write(
+                        "(assert (>= (+ {weights}) 1))\n".format(weights=" ".join(weights)))
+                elif len(weights) == 1:
+                    self.stream.write("(assert (>= {} 1))\n".format(weights[0]))
 
     def break_clique(self, clique):
         if clique:
