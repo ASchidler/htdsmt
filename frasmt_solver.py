@@ -301,24 +301,18 @@ class FraSmtSolver:
                 else:
                     model[nm] = int(val)
 
-        ordering = self._get_ordering(model)
-        weights = self._get_weights(model, ordering)
+        try:
+            ordering = self._get_ordering(model)
+            weights = self._get_weights(model, ordering)
 
-        fhtd = FractionalHypertreeDecomposition.from_ordering(hypergraph=self.hypergraph, ordering=ordering,
-                                                              weights=weights,
-                                                              checker_epsilon=self.__checker_epsilon)
-        #print fhtd
-        # encoding = str(self.__solver.statistics)
-
-        # if isinstance(model, z3.IntNumRef):
-        #     rsx = Decimal(model.as_long())
-        # else:
-        #     rsx = Decimal(model.numerator_as_long()) / Decimal(model.denominator_as_long())
-
-        # if lbound == 1 and not rsx - self.__checker_epsilon <= fhtd.width() <= rsx + self.__checker_epsilon:
-        #     raise ValueError("fhtw should be {0}, but actually is {1}".format(rsx, fhtd.width()))
-        # elif lbound > 1 and rsx + self.__checker_epsilon < fhtd.width():
-        #     raise ValueError("fhtw should be at most {0}, but actually is {1}".format(rsx, fhtd.width()))
+            fhtd = FractionalHypertreeDecomposition.from_ordering(hypergraph=self.hypergraph, ordering=ordering,
+                                                                  weights=weights,
+                                                                  checker_epsilon=self.__checker_epsilon)
+        except KeyError as ee:
+            sys.stdout.write("Error parsing output\n")
+            sys.stdout.write(output)
+            sys.stdout.write("\n")
+            raise ee
 
         ret.update({"objective": fhtd.width(), "decomposition": fhtd})
         return ret
