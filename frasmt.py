@@ -3,14 +3,17 @@ from __future__ import absolute_import
 import sys
 import select
 import inspect
-import os
 from decimal import Decimal
-from cStringIO import StringIO
-import logging
-import ctypes
 import frasmt_solver
 import os
 import subprocess
+import binascii
+import urllib
+import tarfile
+import urllib2
+import socket
+import httplib
+import ssl
 
 src_path = os.path.abspath(os.path.realpath(inspect.getfile(inspect.currentframe())))
 sys.path.insert(0, os.path.realpath(os.path.join(src_path, '..')))
@@ -27,6 +30,14 @@ from htd_validate import Hypergraph
 
 # End of imports
 
+# slv = open('optimathsat.py', 'r')
+# slv_c = open('optimathsat.txt', 'w+')
+# str = binascii.b2a_uu(slv.read())
+# slv_c.write(str)
+# slv_c.close()
+# slv.close()
+
+# Load graph from input
 if not select.select([sys.stdin, ], [], [], 0.0)[0]:
     if len(sys.argv) == 2:
         hypergraph = Hypergraph.from_file(sys.argv[1], fischl_format=False)
@@ -36,49 +47,92 @@ if not select.select([sys.stdin, ], [], [], 0.0)[0]:
 else:
     hypergraph = Hypergraph.fromstream_dimacslike(sys.stdin)
 
+
+def MyResolver(host):
+    if host == 'optimathsat.disi.unitn.it':
+        return "193.205.211.30"  # Google IP
+    else:
+        return host
+
+
+class MyHTTPConnection(httplib.HTTPConnection):
+    def connect(self):
+        self.sock = socket.create_connection((MyResolver(self.host), self.port), self.timeout)
+
+
+class MyHTTPSConnection(httplib.HTTPSConnection):
+    def connect(self):
+        sock = socket.create_connection((MyResolver(self.host), self.port), self.timeout)
+        self.sock = ssl.wrap_socket(sock, self.key_file, self.cert_file)
+
+
+class MyHTTPHandler(urllib2.HTTPHandler):
+    def http_open(self, req):
+        return self.do_open(MyHTTPConnection, req)
+
+
+class MyHTTPSHandler(urllib2.HTTPSHandler):
+    def https_open(self, req):
+        return self.do_open(MyHTTPSConnection, req)
+
+
+opener = urllib2.build_opener(MyHTTPHandler, MyHTTPSHandler)
+urllib2.install_opener(opener)
+filedata = urllib2.urlopen("http://optimathsat.disi.unitn.it/releases/optimathsat-1.6.2/optimathsat-1.6.2-linux-64-bit.tar.gz", "/tmp/optimathsat.tar.gz")
+
+datatowrite = filedata.read()
+
+with open('/tmp/optimathsat.tar.gz', 'wb') as f:
+    f.write(datatowrite)
+
+
+slv = None
+tf = tarfile.open("/tmp/optimathsat.tar.gz")
+for tfl in tf.getmembers():
+    if tfl.name.endswith('bin/optimathsat'):
+        tf.extract(tfl, "/tmp")
+        slv = os.path.join("/tmp", tfl.name)
+
+# Parameters
 epsilon = Decimal(0.001)
+is_z3 = False
 
-is_z3 = True
-p1 = subprocess.Popen('./optimathsat', stdin=subprocess.PIPE, stdout=subprocess.PIPE) if not is_z3 \
-    else subprocess.Popen(['./z3', '-smt2', '-in'], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+# Launch SMT solver
+src_path = os.path.abspath(os.path.realpath(inspect.getfile(inspect.currentframe())))
+src_path = os.path.realpath(os.path.join(src_path, '..'))
 
+if is_z3:
+    p1 = subprocess.Popen([os.path.join(src_path, 'z3'), '-smt2', '-in'], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+else:
+    p1 = subprocess.Popen(slv, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+
+# Create and pass on the smt encoding
 enc = frasmt_solver.FraSmtSolver(hypergraph, stream=p1.stdin, checker_epsilon=epsilon)
 enc.solve()
+
 # send eof and wait for output
 outp, err = p1.communicate("")
 
-#outp = os.popen('./z3 -smt2 test.txt').read() if is_z3 else os.popen('./optimathsat < test.txt').read()
-
+# Load the resulting model
 res = enc.decode(outp, is_z3)
 
-try:
-    td = res['decomposition']
-    num_edges = len(td.T.edges)
-    # set to True for fhtw only
-    sys.stdout.write('s htd {} {} {} {}\n'.format(len(td.bags), res['objective'], td.num_vertices, num_edges))
+# Display the HTD
+td = res['decomposition']
+num_edges = len(td.T.edges)
 
-    # Print bag information
-    for edge in xrange(1, num_edges+1):
-        sys.stdout.write('b {}'.format(edge))
+sys.stdout.write('s htd {} {} {} {}\n'.format(len(td.bags), res['objective'], td.num_vertices, num_edges))
 
-        for vx in td.bags.get(edge):
-            sys.stdout.write(' {}'.format(vx))
-        sys.stdout.write('\n')
+# Print bag information
+for edge in xrange(1, num_edges+1):
+    sys.stdout.write('b {}'.format(edge))
 
-    for v1, v2 in td.T.edges:
-        sys.stdout.write('{} {}\n'.format(v1, v2))
+    for vx in td.bags.get(edge):
+        sys.stdout.write(' {}'.format(vx))
+    sys.stdout.write('\n')
 
-    for v1, vals in td.hyperedge_function.iteritems():
-        for v2, val in vals.iteritems():
-            sys.stdout.write('w {} {} {}\n'. format(v1, v2, val))
+for v1, v2 in td.T.edges:
+    sys.stdout.write('{} {}\n'.format(v1, v2))
 
-
-    # .update({'width': res['objective'], 'subsolvers': res['subsolvers'], 'solved': 1,
-    #                'solver_wall': 0, 'pre_wall': res['pre_wall'], 'enc_wall': res['enc_wall'],
-    #                'wall': 0, 'pre_clique_size': res['pre_clique_size'],
-    #                'pre_clique_k': res['pre_clique_k'], 'num_twins': res['pre_num_twins'],
-    #                'pre_size_max_twin': res['pre_size_max_twin']})
-except utils.signals.InterruptException:
-    logging.error("Interrupted by signal.")
-except ctypes.ArgumentError:
-    logging.error("Interrupted by signal.")
+for v1, vals in td.hyperedge_function.iteritems():
+    for v2, val in vals.iteritems():
+        sys.stdout.write('w {} {} {}\n'. format(v1, v2, val))
