@@ -118,7 +118,7 @@ class FraSmtSolver:
                 self.stream.write(
                     "(assert ( <= (+ {weights}) {m}))\n".format(weights=" ".join(weights), m=m))
             elif len(weights) == 1:
-                self.stream.write("(assert (>= {} {}))\n".format(weights[0], m))
+                self.stream.write("(assert (<= {} {}))\n".format(weights[0], m))
 
     def elimination_ordering(self, n):
         tord = lambda p, q: 'ord_{p}{q}'.format(p=p, q=q) if p < q \
@@ -248,13 +248,6 @@ class FraSmtSolver:
         self.break_clique(clique=clique)
         self.encode_twins(twin_iter=twins, clique=clique)
 
-    def configration(self):
-        # z3.set_option(html_mode=False)
-        # z3.set_option(rational_to_decimal=True)
-        # z3.set_option(precision=30)
-        # z3.set_option(verbose=1)
-        pass
-
     def solve(self, clique=None, twins=None):
         var = self.add_var("m")
         m = self._vartab[var]
@@ -262,7 +255,6 @@ class FraSmtSolver:
         self.stream.write("(assert (>= m 1))\n")
 
         self.prepare_vars()
-        self.configration()
 
         self.encode(clique=clique, twins=twins)
 
