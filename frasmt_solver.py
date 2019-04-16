@@ -18,13 +18,11 @@ libs = ['htd_validate']
 if src_path not in sys.path:
     for lib in libs:
         sys.path.insert(0, os.path.join(src_path, lib))
-from htd_validate.decompositions import FractionalHypertreeDecomposition
+from htd_validate.decompositions import FractionalHypertreeDecomposition, HypertreeDecomposition
 
 
 class FraSmtSolver:
     def __init__(self, hypergraph, stream, wprecision=20, timeout=0, checker_epsilon=None):
-        if not checker_epsilon:
-            checker_epsilon = Decimal(0.001)
         self.__checker_epsilon = checker_epsilon
         self.hypergraph = hypergraph
         self.num_vars = 1
@@ -296,17 +294,20 @@ class FraSmtSolver:
         try:
             ordering = self._get_ordering(model)
             weights = self._get_weights(model, ordering)
-
-            fhtd = FractionalHypertreeDecomposition.from_ordering(hypergraph=self.hypergraph, ordering=ordering,
+            htd = HypertreeDecomposition.from_ordering(hypergraph=self.hypergraph, ordering=ordering,
                                                                   weights=weights,
                                                                   checker_epsilon=self.__checker_epsilon)
+
         except KeyError as ee:
             sys.stdout.write("Error parsing output\n")
             sys.stdout.write(output)
             sys.stdout.write("\n")
             raise ee
 
-        ret.update({"objective": fhtd.width(), "decomposition": fhtd})
+        ret.update({"objective": htd.width(), "decomposition": htd})
+#        if not htd.validate(self.hypergraph):
+ #           raise RuntimeError("Found a GHTD that is not a HTD")
+
         return ret
 
     def _get_ordering(self, model):

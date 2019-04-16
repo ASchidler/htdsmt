@@ -44,7 +44,7 @@ else:
 slv = solver_decoder.SolverDecoder.decode()
 
 # Parameters
-epsilon = Decimal(0.001)
+epsilon = None
 is_z3 = True
 
 # Launch SMT solver

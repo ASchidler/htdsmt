@@ -138,7 +138,7 @@ class FractionalHypertreeDecomposer:
                     z3_wall = time.time()
                     decomposer = FractionalHypertreeDecomposition_z3(self._pp.hgp.hg, timeout=self.timeout,
                                                                      checker_epsilon=self.__checker_epsilon,
-                                                                     ghtd=self.ghtd)
+                                                                     ghtd=self.ghtd, stream=self.stream)
                     res = decomposer.solve(lbound=self._pp.lb if only_fhtw else 1,
                                            clique=clique, twins=twin_vertices, ubound=upper_bound)
                     ret['subsolvers'][solver_run_id] = {'width': res['objective'],
