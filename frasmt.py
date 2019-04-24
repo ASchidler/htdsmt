@@ -3,7 +3,6 @@ from __future__ import absolute_import
 import sys
 import select
 import inspect
-from decimal import Decimal
 import frasmt_solver
 import os
 import subprocess
@@ -24,13 +23,24 @@ if src_path not in sys.path:
 from htd_validate import Hypergraph
 
 # End of imports
-# Encode solver as string
-#solver_decoder.SolverDecoder.encode_z3()
+# Use z3 or mathsat?
+is_z3 = False
+# Filenames and paths to use
+inp_file = '/tmp/slv.encode'
+model_file = '/tmp/slv.model'
+err_file = '/tmp/slv.err'
 
-# Disable logging, otherwise PACE runs fail...
+# Disable logging, otherwise PACE runs fail... Exceptions will still terminate the run
 logging.disable(logging.FATAL)
 
+# Encode solver as string, uncomment before submitting!
+# if is_z3:
+#     solver_decoder.encode_z3()
+# else:
+#     solver_decoder.encode_os()
+
 # Load graph from input
+hypergraph = None
 if not select.select([sys.stdin, ], [], [], 0.0)[0]:
     if len(sys.argv) == 2:
         hypergraph = Hypergraph.from_file(sys.argv[1], fischl_format=False)
@@ -41,37 +51,42 @@ else:
     hypergraph = Hypergraph.fromstream_dimacslike(sys.stdin)
 
 # Load solver and check permissions
-slv = solver_decoder.SolverDecoder.decode()
-
-# Parameters
-epsilon = None
-is_z3 = True
+slv = solver_decoder.decode()
 
 # Launch SMT solver
 src_path = os.path.abspath(os.path.realpath(inspect.getfile(inspect.currentframe())))
 src_path = os.path.realpath(os.path.join(src_path, '..'))
 
-encf = open("/tmp/test.txt", "w+")
-# Create and pass on the smt encoding
-enc = frasmt_solver.FraSmtSolver(hypergraph, stream=encf, checker_epsilon=epsilon)
-enc.solve()
-encf.close()
+# Create temporary files
+inpf = open(inp_file, "w+")
+modelf = open(model_file, "w+")
+errorf = open(err_file, "w+")
 
-encf = open("/tmp/test.txt", "r")
-res = open("/tmp/test2.txt", "w+")
+# Create encoding of the instance
+enc = frasmt_solver.FraSmtSolver(hypergraph, stream=inpf, checker_epsilon=None)
+enc.solve()
+
+# Solve using the SMT solver
+inpf.seek(0)
 if is_z3:
-    p1 = subprocess.Popen([slv, '-smt2', '-in'], stdin=encf, stdout=res)
+    p1 = subprocess.Popen([slv, '-smt2', '-in'], stdin=inpf, stdout=modelf, stderr=errorf)
 else:
-    p1 = subprocess.Popen(slv, stdin=encf, stdout=res)
+    p1 = subprocess.Popen(slv, stdin=inpf, stdout=modelf, stderr=errorf, shell=True)
 
 p1.wait()
-res.close()
-res = open("/tmp/test2.txt", "r")
-outp = res.read()
-res.close()
 
-# send eof and wait for output
-#outp, err = p1.communicate("")
+# Retrieve the result
+modelf.seek(0)
+errorf.seek(0)
+outp = modelf.read()
+errp = errorf.read()
+
+inpf.close()
+modelf.close()
+errorf.close()
+
+if len(errp) > 0:
+    raise RuntimeError(errp)
 
 # Load the resulting model
 res = enc.decode(outp, is_z3)
