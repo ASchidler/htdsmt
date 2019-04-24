@@ -1,0 +1,107 @@
+#!/usr/bin/env python
+#
+# Copyright 2017
+# Johannes K. Fichte, TU Wien, Austria
+# Markus Hecher, TU Wien, Austria
+#
+# htd_validate is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.  htd_validate is distributed in
+# the hope that it will be useful, but WITHOUT ANY WARRANTY; without
+# even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+# PARTICULAR PURPOSE.  See the GNU General Public License for more
+# details.  You should have received a copy of the GNU General Public
+# License along with htd_validate.  If not, see
+# <http://www.gnu.org/licenses/>.
+
+from __future__ import absolute_import
+
+import argparse
+import inspect
+import logging
+import logging.config
+import os
+import subprocess
+import sys
+
+# TODO: figure out a new way to use imports for binaries here
+# this just seems really really ugly
+src_path = os.path.abspath(os.path.realpath(inspect.getfile(inspect.currentframe())))
+src_path = os.path.realpath(os.path.join(src_path, '../..'))
+
+if src_path not in sys.path:
+    sys.path.insert(0, src_path)
+
+import htd_validate
+
+__author__ = 'Johannes K. Fichte & Markus Hecher'
+__license__ = 'GPL'
+
+
+def get_git_revision_short_hash():
+    return subprocess.check_output(['git', 'rev-parse', '--short', 'HEAD'])[:-1]
+
+
+__version__ = '1.0.1-dev (hash: %s)' % get_git_revision_short_hash()
+
+
+def setup_logging(config_file='%s/logging.conf' % (os.path.dirname(__file__))):
+    logging.config.fileConfig(config_file)
+
+
+setup_logging(os.path.join(os.path.dirname(os.path.realpath(__file__)), 'logging.conf'))
+
+
+def is_valid_file(parser, arg):
+    if not arg:
+        parser.error('Missing file.')
+    if not os.path.exists(arg):
+        parser.error('The file "%s" does not exist!' % arg)
+    return arg
+
+
+# TODO: implement read header to guess decomposition type and remove it from the commandline arguments
+available_validators = [
+    # htd_validate.validators.AutoDecompositionValidator,
+    htd_validate.validators.TreeDecompositionValidator,
+    htd_validate.validators.GeneralizedHypertreeDecompositionValidator,
+    htd_validate.validators.HypertreeDecompositionValidator,
+    htd_validate.validators.FractionalHypertreeDecompositionValidator
+]
+d_short_names = {cls.short_name(): cls for cls in available_validators}
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(description='%(prog)s')
+    parser.add_argument('--version', action='version', version='%(prog)s {version}'.format(version=__version__))
+    parser.add_argument('-t', '--type', dest='validator', action='store', type=str, help='Type of the Decomposition',
+                        choices=d_short_names.keys(),
+                        default=htd_validate.validators.TreeDecompositionValidator.short_name())
+    parser.add_argument('-ff', '--fischl-format', dest='fischl_format', action='store_true', default=False,
+                        help='Use the famous Fischl format.')
+    required = parser.add_argument_group('required arguments')
+    required.add_argument('-g', '--hypergraph', dest='graph_filename', action='store', required=True,
+                          type=lambda x: is_valid_file(parser, x),
+                          help='Input dimacs hypergraph file')
+    required.add_argument('-d', '--decomposition', dest='decomposition_filename', action='store', required=True,
+                          type=lambda x: is_valid_file(parser, x), help='Input decomposition file')
+    args = parser.parse_args()
+    return args
+
+
+def main():
+    args = parse_args()
+    validator_class_name = args.validator
+    graph_filename = args.graph_filename
+    decomposition_filename = args.decomposition_filename
+    fischl_format = args.fischl_format
+    Validator = d_short_names[validator_class_name]()
+    HG = getattr(htd_validate.utils, Validator.graph_type()).from_file(graph_filename, fischl_format=fischl_format)
+    Decomp = getattr(htd_validate.decompositions, Validator.decomposition_type()).from_file(decomposition_filename)
+    ret = Decomp.validate(HG)
+    exit(not ret)
+
+
+if __name__ == "__main__":
+    main()
