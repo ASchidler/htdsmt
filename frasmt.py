@@ -98,16 +98,18 @@ num_edges = len(td.T.edges)
 sys.stdout.write('s htd {} {} {} {}\n'.format(len(td.bags), res['objective'], td.num_vertices, num_edges))
 
 # Print bag information
-for edge in xrange(1, num_edges+1):
+for edge, _ in td.hyperedge_function.iteritems():
     sys.stdout.write('b {}'.format(edge))
 
     for vx in td.bags.get(edge):
         sys.stdout.write(' {}'.format(vx))
     sys.stdout.write('\n')
 
+# Print edges
 for v1, v2 in td.T.edges:
     sys.stdout.write('{} {}\n'.format(v1, v2))
 
+# Print mapping
 for v1, vals in td.hyperedge_function.iteritems():
     for v2, val in vals.iteritems():
         sys.stdout.write('w {} {} {}\n'. format(v1, v2, val))
