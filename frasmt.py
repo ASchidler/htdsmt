@@ -95,7 +95,9 @@ res = enc.decode(outp, is_z3)
 td = res['decomposition']
 num_edges = len(td.T.edges)
 
-sys.stdout.write('s htd {} {} {} {}\n'.format(len(td.bags), res['objective'], td.num_vertices, num_edges))
+sys.stdout.write('s htd {} {} {} {}\n'.format(len(td.bags), res['objective'], td.num_vertices,
+                                              # Last one is the number of hyperedges
+                                              len(next(iter(td.hyperedge_function.itervalues())))))
 
 # Print bag information
 for edge, _ in td.hyperedge_function.iteritems():
@@ -106,7 +108,7 @@ for edge, _ in td.hyperedge_function.iteritems():
     sys.stdout.write('\n')
 
 # Print edges
-for v1, v2 in td.T.edges:
+for v1, v2 in td.tree.edges:
     sys.stdout.write('{} {}\n'.format(v1, v2))
 
 # Print mapping
