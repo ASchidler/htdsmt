@@ -18,6 +18,12 @@ def encode_os():
             conv = binascii.hexlify(content)
             f.write("file_enc = \"{}\"\n".format(conv))
 
+def encode_ms():
+    with open('mathsat', 'rb') as fl:
+        with open("solver_enc.py", "w+") as f:
+            content = fl.read()
+            conv = binascii.hexlify(content)
+            f.write("file_enc = \"{}\"\n".format(conv))
 
 def encode_z3():
     with open('z3', 'rb') as fl:

@@ -246,7 +246,7 @@ class FraSmtSolver:
         self.break_clique(clique=clique)
         self.encode_twins(twin_iter=twins, clique=clique)
 
-    def solve(self, clique=None, twins=None):
+    def solve(self, clique=None, twins=None, optimize=True):
         var = self.add_var("m")
         m = self._vartab[var]
         self.stream.write("(declare-const m Int)\n")
@@ -262,7 +262,8 @@ class FraSmtSolver:
 
         # #THERE IS A PROBLEM WITH MINIMIZATION APPARENTLY
         # # #WIE WILL STEFAN PROGRESSION ERKLAEREN???
-        self.stream.write("(minimize m)\n")
+        if optimize:
+            self.stream.write("(minimize m)\n")
         self.stream.write("(check-sat)\n(get-model)\n")
 
     def decode(self, output, is_z3):
@@ -305,8 +306,8 @@ class FraSmtSolver:
             raise ee
 
         ret.update({"objective": htd.width(), "decomposition": htd})
-#        if not htd.validate(self.hypergraph):
- #           raise RuntimeError("Found a GHTD that is not a HTD")
+        # if not htd.validate(self.hypergraph):
+        #     raise RuntimeError("Found a GHTD that is not a HTD")
 
         return ret
 
