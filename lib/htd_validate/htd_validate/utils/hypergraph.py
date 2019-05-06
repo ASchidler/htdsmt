@@ -640,14 +640,14 @@ class Hypergraph(object):
         num_edges = 0
         num_verts = 0
 
-        is_dimacs = False
+        is_dimacs = True
         HG = clazz()
         for line in stream.readlines():
             line = line.split()
             if not line:
                 continue
             elif line[0] == 'p':
-                is_dimacs = line[1] == 'edge'
+                is_dimacs = line[1] == 'htd'
             elif line[0] != 'c':
                 if is_dimacs:
                     HG.add_hyperedge(map(int, line[1:]))
