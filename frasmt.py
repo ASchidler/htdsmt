@@ -95,7 +95,10 @@ res = enc.decode(outp, is_z3)
 td = res['decomposition']
 num_edges = len(td.T.edges)
 
-sys.stdout.write('s htd {} {} {} {}\n'.format(len(td.bags), res['objective'], td.num_vertices,
+if not td.validate(td.hypergraph):
+    raise RuntimeError("Found a GHTD that is not a HTD")
+
+sys.stdout.write('s htd {} {} {} {}\n'.format(len(td.bags), res['objective'], hypergraph.number_of_nodes(),
                                               # Last one is the number of hyperedges
                                               len(next(iter(td.hyperedge_function.itervalues())))))
 

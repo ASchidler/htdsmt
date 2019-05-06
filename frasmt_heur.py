@@ -35,10 +35,10 @@ err_file = '/tmp/slv.err'
 logging.disable(logging.FATAL)
 
 # Encode solver as string, uncomment before submitting!
-if is_z3:
-    solver_decoder.encode_z3()
-else:
-    solver_decoder.encode_ms()
+# if is_z3:
+#     solver_decoder.encode_z3()
+# else:
+#     solver_decoder.encode_ms()
 
 # Load graph from input
 hypergraph = None
@@ -130,9 +130,12 @@ inpf.close()
 td = res['decomposition']
 num_edges = len(td.T.edges)
 
-sys.stdout.write('s htd {} {} {} {}\n'.format(len(td.bags), res['objective'], td.num_vertices,
+sys.stdout.write('s htd {} {} {} {}\n'.format(len(td.bags), res['objective'], hypergraph.number_of_nodes(),
                                               # Last one is the number of hyperedges
                                               len(next(iter(td.hyperedge_function.itervalues())))))
+
+if not td.validate(td.hypergraph):
+    raise RuntimeError("Found a GHTD that is not a HTD")
 
 # Print bag information
 for edge, _ in td.hyperedge_function.iteritems():
