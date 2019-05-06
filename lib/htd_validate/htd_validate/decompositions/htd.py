@@ -47,9 +47,13 @@ class HypertreeDecomposition(GeneralizedHypertreeDecomposition):
         # We have a ghtd, now try to repair it to a htd
         # Try each node as a root. Next try to repair the bags. This may not yield a valid decomposition
         queue = [nd for nd in g.tree.nodes if nd != r]
+        bag_copy = None
         while True:
-            if g.inverse_edge_function_holds():
+            if g.validate(hypergraph):
                 break
+
+            if bag_copy is not None:
+                g.bags = bag_copy
 
             if len(queue) == 0:
                 break
@@ -57,6 +61,9 @@ class HypertreeDecomposition(GeneralizedHypertreeDecomposition):
             r = queue.pop()
             g.tree = DiGraph()
             g.tree.add_node(r)
+            bag_copy = {}
+            for k, v in g.bags.iteritems():
+                bag_copy[k] = set(v)
 
             dfs_q = [r]
 
