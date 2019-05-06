@@ -239,16 +239,46 @@ class FraSmtSolver:
                                 self.add_clause([self.ord[i][j]])
 
     def encode_htd(self, n):
+        vvars = []
         for i in xrange(1, n+1):
+            vvars.append("is_root_{}".format(i))
+            self.stream.write("(declare-const is_root_{} Bool)\n".format(i))
             for j in xrange(1, n+1):
                 self.stream.write("(declare-const covers_{}_{} Bool)\n".format(i, j))
+                self.stream.write("(declare-const is_desc_{}_{} Bool)\n".format(i, j))
                 if i != j:
                     self.stream.write("(declare-const is_desc_{}_{} Bool)\n".format(i, j))
+                    self.stream.write("(declare-const is_pred_{}_{} Bool)\n".format(i, j))
+                    self.stream.write("(declare-const direct_pred_{}_{} Bool)\n".format(i, j))
+
+        self.stream.write("(assert (or {vvars}))\n".format(vvars=" ".join(vvars)))
 
         for i in xrange(1, n+1):
             for j in xrange(1, n + 1):
                 for e in self.hypergraph.incident_edges(j):
                     self.stream.write("(assert (=> (> weight_{i}_e{e} 0) covers_{i}_{j}))\n".format(i=i, j=j, e=e))
+
+        for i in xrange(1, n+1):
+            vvars = []
+            for j in xrange(1, n+1):
+                if i == j:
+                    continue
+                vvars.append("is_pred_{i}_{j}")
+                self.stream.write("(assert (=> is_desc_{i}_{j} (not is_root_{i})))\n")
+
+                for k in xrange(1, n+1):
+                    if k == i or k == j:
+                        continue
+
+                    ordvar1 = '(not ord_{}_{})'.format(i, j) if i < j else 'ord_{}_{}'.format(j, i)
+                    ordvar2 = '(not ord_{}_{})'.format(i, k) if i < k else 'ord_{}_{}'.format(k, i)
+                    ordvar3 = '(not ord_{}_{})'.format(j, k) if j < k else 'ord_{}_{}'.format(k, j)
+
+                    self.stream.write("(assert (or {v1} {v2} {v3} (not is_desc_{i}_{j}) (not is_desc_{i}_{k}) (not is_pred_{i}_{k})))"
+                                      .format(v1=ordvar1, v2=ordvar2, v3=ordvar3, i=i, j=j, k=k))
+
+                    self.stream.write("(assert (or (not direct_pred_{i}_{j}) (not direct_pred_{j}_{k}) direct_pred_{i}_{k}))")
+            self.stream.write("(assert (or is_root_{i} {vvars}))\n".format(vvars=" ".join(vvars), i=i))
 
         for i in xrange(1, n+1):
             for j in xrange(1, n+1):
@@ -259,7 +289,6 @@ class FraSmtSolver:
 
                 # i is before, at therefore potential descendant
                 # The negation is reversed, to avoid double negation in the next clause
-                #ordvar = 'ord_{}_{}'.format(i, j) if i < j else '(not ord_{}_{})'.format(j, i)
                 ordvar = '(not ord_{}_{})'.format(i, j) if i < j else 'ord_{}_{}'.format(j, i)
 
                 # First possibility, i is left of j and they either share i or j in the bag
@@ -285,19 +314,15 @@ class FraSmtSolver:
                     continue
 
                 self.stream.write(
-                    "(assert (or (not is_desc_{i}_{j}) arc_{j}_{i} (not covers_{j}_{i})))\n"
+                    "(assert (or (not direct_pred_{i}_{j}) arc_{j}_{i} (not covers_{j}_{i})))\n"
                     .format(i=i, j=j))
-
-                # self.stream.write(
-                #     "(assert (or (not is_desc_{i}_{j}) arc_{i}_{j} (not covers_{j}_{i})))\n"
-                #     .format(i=i, j=j))
 
                 for k in xrange(1, n + 1):
                     if k == i or k == j:
                         continue
 
                     self.stream.write(
-                        "(assert (or (not is_desc_{i}_{j}) (not arc_{i}_{k}) arc_{j}_{k} (not covers_{j}_{k})))\n"
+                        "(assert (or (not direct_pred_{i}_{j}) (not arc_{i}_{k}) arc_{j}_{k} (not covers_{j}_{k})))\n"
                         .format(i=i, j=j, k=k))
 
     def encode(self, clique=None, twins=None, htd=True):
