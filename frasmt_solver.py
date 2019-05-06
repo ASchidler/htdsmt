@@ -238,6 +238,64 @@ class FraSmtSolver:
                             if i < j:
                                 self.add_clause([self.ord[i][j]])
 
+    def encode_htd(self, n):
+        for i in xrange(1, n+1):
+            for j in xrange(1, n+1):
+                self.stream.write("(declare-const covers_{}_{} Bool)\n".format(i, j))
+                if i != j:
+                    self.stream.write("(declare-const is_desc_{}_{} Bool)\n".format(i, j))
+
+        for i in xrange(1, n+1):
+            for j in xrange(1, n + 1):
+                for e in self.hypergraph.incident_edges(j):
+                    self.stream.write("(assert (=> (> weight_{i}_e{e} 0) covers_{i}_{j}))\n".format(i=i, j=j, e=e))
+
+        for i in xrange(1, n+1):
+            for j in xrange(1, n+1):
+                if i == j:
+                    continue
+
+                # i is before, at therefore potential descendant
+                # The negation is reversed, to avoid double negation in the next clause
+                ordvar = '(not ord_{}_{})'.format(i, j) if i < j else 'ord_{}_{}'.format(j, i)
+                #ordvar = 'ord_{}_{}'.format(i, j) if i < j else '(not ord_{}_{})'.format(j, i)
+
+                self.stream.write("(assert (or {ordvar} (not arc_{j}_{i}) is_desc_{i}_{j}))\n"
+                                  .format(i=i, j=j, ordvar=ordvar))
+                self.stream.write("(assert (or {ordvar} (not arc_{i}_{j}) is_desc_{i}_{j}))\n"
+                                  .format(i=i, j=j, ordvar=ordvar))
+
+                for k in xrange(1, n+1):
+                    if k == i or k == j:
+                        continue
+
+                    self.stream.write("(assert (or {ordvar} (not arc_{i}_{k}) (not arc_{j}_{k}) is_desc_{i}_{j}))\n"
+                                      .format(i=i, j=j, k=k, ordvar=ordvar))
+
+                    self.stream.write("(assert (or (not is_desc_{i}_{j}) (not is_desc_{j}_{k}) is_desc_{i}_{k}))\n"
+                                      .format(i=i, j=j, k=k))
+
+        for i in xrange(1, n+1):
+            for j in xrange(1, n+1):
+                if i == j:
+                    continue
+
+                self.stream.write(
+                    "(assert (or (not is_desc_{i}_{j}) arc_{j}_{i} (not covers_{j}_{i})))\n"
+                    .format(i=i, j=j))
+
+                self.stream.write(
+                    "(assert (or (not is_desc_{i}_{j}) arc_{i}_{j} (not covers_{j}_{i})))\n"
+                        .format(i=i, j=j))
+
+                for k in xrange(1, n + 1):
+                    if k == i or k == j:
+                        continue
+
+                    self.stream.write(
+                        "(assert (or (not is_desc_{i}_{j}) (not arc_{i}_{k}) arc_{j}_{k} (not covers_{j}_{k})))\n"
+                        .format(i=i, j=j, k=k))
+
     def encode(self, clique=None, twins=None):
         n = self.hypergraph.number_of_nodes()
 
@@ -245,6 +303,7 @@ class FraSmtSolver:
         self.cover(n)
         self.break_clique(clique=clique)
         self.encode_twins(twin_iter=twins, clique=clique)
+        self.encode_htd(n)
 
     def solve(self, clique=None, twins=None, optimize=True):
         var = self.add_var("m")
