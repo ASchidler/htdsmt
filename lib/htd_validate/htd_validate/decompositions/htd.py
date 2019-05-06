@@ -44,6 +44,8 @@ class HypertreeDecomposition(GeneralizedHypertreeDecomposition):
                 r = c_node
                 break
 
+        # We have a ghtd, now try to repair it to a htd
+        # Try each node as a root. Next try to repair the bags. This may not yield a valid decomposition
         queue = [nd for nd in g.tree.nodes if nd != r]
         while True:
             if g.inverse_edge_function_holds():
@@ -64,6 +66,19 @@ class HypertreeDecomposition(GeneralizedHypertreeDecomposition):
                     if o_n not in g.tree.nodes:
                         g.tree.add_edge(c_n, o_n)
                         dfs_q.append(o_n)
+
+            changed = True
+            while changed:
+                changed = False
+                for u in g.tree.nodes:
+                    T_u = dfs_tree(g.tree, u)
+                    vertices_in_bags_below_u = set()
+                    for t in T_u.nodes():
+                        vertices_in_bags_below_u.update(g.bags[t])
+                        missing = (vertices_in_bags_below_u & g._B(u)) - g.bags[u]
+                        if len(missing) > 0:
+                            g.bags[u].update(missing)
+                            changed = True
 
         return g
 
