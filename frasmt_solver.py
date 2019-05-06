@@ -255,16 +255,20 @@ class FraSmtSolver:
                 if i == j:
                     continue
 
+                self.stream.write("(assert (or (not is_desc_{i}_{j}) (not is_desc_{j}_{i})))".format(i=i, j=j))
+
                 # i is before, at therefore potential descendant
                 # The negation is reversed, to avoid double negation in the next clause
-                ordvar = '(not ord_{}_{})'.format(i, j) if i < j else 'ord_{}_{}'.format(j, i)
                 #ordvar = 'ord_{}_{}'.format(i, j) if i < j else '(not ord_{}_{})'.format(j, i)
+                ordvar = '(not ord_{}_{})'.format(i, j) if i < j else 'ord_{}_{}'.format(j, i)
 
+                # First possibility, i is left of j and they either share i or j in the bag
                 self.stream.write("(assert (or {ordvar} (not arc_{j}_{i}) is_desc_{i}_{j}))\n"
                                   .format(i=i, j=j, ordvar=ordvar))
                 self.stream.write("(assert (or {ordvar} (not arc_{i}_{j}) is_desc_{i}_{j}))\n"
                                   .format(i=i, j=j, ordvar=ordvar))
 
+                # Other possibility, i is before j and they share another variable
                 for k in xrange(1, n+1):
                     if k == i or k == j:
                         continue
@@ -284,9 +288,9 @@ class FraSmtSolver:
                     "(assert (or (not is_desc_{i}_{j}) arc_{j}_{i} (not covers_{j}_{i})))\n"
                     .format(i=i, j=j))
 
-                self.stream.write(
-                    "(assert (or (not is_desc_{i}_{j}) arc_{i}_{j} (not covers_{j}_{i})))\n"
-                        .format(i=i, j=j))
+                # self.stream.write(
+                #     "(assert (or (not is_desc_{i}_{j}) arc_{i}_{j} (not covers_{j}_{i})))\n"
+                #     .format(i=i, j=j))
 
                 for k in xrange(1, n + 1):
                     if k == i or k == j:
@@ -296,24 +300,27 @@ class FraSmtSolver:
                         "(assert (or (not is_desc_{i}_{j}) (not arc_{i}_{k}) arc_{j}_{k} (not covers_{j}_{k})))\n"
                         .format(i=i, j=j, k=k))
 
-    def encode(self, clique=None, twins=None):
+    def encode(self, clique=None, twins=None, htd=True):
         n = self.hypergraph.number_of_nodes()
 
         self.elimination_ordering(n)
         self.cover(n)
         self.break_clique(clique=clique)
         self.encode_twins(twin_iter=twins, clique=clique)
-        self.encode_htd(n)
+        if htd:
+            self.encode_htd(n)
 
-    def solve(self, clique=None, twins=None, optimize=True):
+    def solve(self, clique=None, twins=None, optimize=True, htd=True, limit=None):
         var = self.add_var("m")
         m = self._vartab[var]
         self.stream.write("(declare-const m Int)\n")
         self.stream.write("(assert (>= m 1))\n")
+        if limit:
+            self.stream.write("(assert (>= m {}))\n".format(limit))
 
         self.prepare_vars()
 
-        self.encode(clique=clique, twins=twins)
+        self.encode(clique=clique, twins=twins, htd=htd)
 
         # assert(False)
         self.fractional_counters(m=m)

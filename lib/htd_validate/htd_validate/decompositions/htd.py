@@ -34,6 +34,7 @@ class HypertreeDecomposition(GeneralizedHypertreeDecomposition):
                                   checker_epsilon=checker_epsilon)
 
         g.hypergraph = hypergraph
+
         # For the HTD the root is important. Try to find a root, that
         ug = g.tree.to_undirected()
 
@@ -48,15 +49,16 @@ class HypertreeDecomposition(GeneralizedHypertreeDecomposition):
         # Try each node as a root. Next try to repair the bags. This may not yield a valid decomposition
         queue = [nd for nd in g.tree.nodes if nd != r]
         bag_copy = None
+
         while True:
             if g.validate(hypergraph):
                 break
 
-            if bag_copy is not None:
-                g.bags = bag_copy
-
             if len(queue) == 0:
                 break
+
+            if bag_copy is not None:
+                g.bags = bag_copy
 
             r = queue.pop()
             g.tree = DiGraph()
@@ -82,10 +84,11 @@ class HypertreeDecomposition(GeneralizedHypertreeDecomposition):
                     vertices_in_bags_below_u = set()
                     for t in T_u.nodes():
                         vertices_in_bags_below_u.update(g.bags[t])
-                        missing = (vertices_in_bags_below_u & g._B(u)) - g.bags[u]
-                        if len(missing) > 0:
-                            g.bags[u].update(missing)
-                            changed = True
+                    missing = (vertices_in_bags_below_u & g._B(u)) - g.bags[u]
+                    if len(missing) > 0:
+                        g.bags[u].update(missing)
+                        changed = True
+                        break
 
         return g
 
