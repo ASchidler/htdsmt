@@ -263,8 +263,8 @@ class FraSmtSolver:
             for j in xrange(1, n+1):
                 if i == j:
                     continue
-                vvars.append("is_pred_{i}_{j}")
-                self.stream.write("(assert (=> is_desc_{i}_{j} (not is_root_{i})))\n")
+                vvars.append("is_pred_{i}_{j}".format(i=i, j=j))
+                self.stream.write("(assert (=> is_desc_{i}_{j} (not is_root_{i})))\n".format(i=i, j=j))
 
                 for k in xrange(1, n+1):
                     if k == i or k == j:
@@ -274,10 +274,11 @@ class FraSmtSolver:
                     ordvar2 = '(not ord_{}_{})'.format(i, k) if i < k else 'ord_{}_{}'.format(k, i)
                     ordvar3 = '(not ord_{}_{})'.format(j, k) if j < k else 'ord_{}_{}'.format(k, j)
 
-                    self.stream.write("(assert (or {v1} {v2} {v3} (not is_desc_{i}_{j}) (not is_desc_{i}_{k}) (not is_pred_{i}_{k})))"
+                    self.stream.write("(assert (or {v1} {v2} {v3} (not is_desc_{i}_{j}) (not is_desc_{i}_{k}) (not is_pred_{i}_{k})))\n"
                                       .format(v1=ordvar1, v2=ordvar2, v3=ordvar3, i=i, j=j, k=k))
 
-                    self.stream.write("(assert (or (not direct_pred_{i}_{j}) (not direct_pred_{j}_{k}) direct_pred_{i}_{k}))")
+                    self.stream.write("(assert (or (not direct_pred_{i}_{j}) (not direct_pred_{j}_{k}) direct_pred_{i}_{k}))\n"
+                                      .format(i=i, j=j, k=k))
             self.stream.write("(assert (or is_root_{i} {vvars}))\n".format(vvars=" ".join(vvars), i=i))
 
         for i in xrange(1, n+1):
