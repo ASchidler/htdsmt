@@ -28,12 +28,18 @@ class HypertreeDecomposition(GeneralizedHypertreeDecomposition):
         return len(self.bags)
 
     @classmethod
-    def from_ordering(cls, hypergraph, ordering=None, weights=None, checker_epsilon=None):
+    def from_ordering(cls, hypergraph, ordering=None, weights=None, checker_epsilon=None, edges=None):
         pgraph_view = HypergraphPrimalView(hypergraph=hypergraph)
         g = cls._from_ordering(hypergraph=pgraph_view, plot_if_td_invalid=False, ordering=ordering, weights=weights,
                                   checker_epsilon=checker_epsilon)
 
         g.hypergraph = hypergraph
+
+        if edges:
+            g.tree = DiGraph()
+
+            for i, j in edges:
+                g.tree.add_edge(i, j)
 
         # For the HTD the root is important. Try to find a root, that
         ug = g.tree.to_undirected()
@@ -47,7 +53,7 @@ class HypertreeDecomposition(GeneralizedHypertreeDecomposition):
 
         # We have a ghtd, now try to repair it to a htd
         # Try each node as a root. Next try to repair the bags. This may not yield a valid decomposition
-        queue = [nd for nd in g.tree.nodes if nd != r]
+        queue = [nd for nd in g.tree.nodes]
         bag_copy = None
 
         while True:
@@ -88,7 +94,6 @@ class HypertreeDecomposition(GeneralizedHypertreeDecomposition):
                     if len(missing) > 0:
                         g.bags[u].update(missing)
                         changed = True
-                        break
 
         return g
 
