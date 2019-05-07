@@ -98,6 +98,7 @@ for htd in [False, True]:
     if td.validate(td.hypergraph):
         break
 
+
 if not td.validate(td.hypergraph):
     raise RuntimeError(
         "Found a GHTD that is not a HTD. HTD constraint holds {}".format(td.inverse_edge_function_holds()))
@@ -124,3 +125,4 @@ for v1, v2 in td.tree.edges:
 for v1, vals in td.hyperedge_function.iteritems():
     for v2, val in vals.iteritems():
         sys.stdout.write('w {} {} {}\n'. format(v1, v2, val))
+
