@@ -6,7 +6,7 @@ import inspect
 import frasmt_solver
 import os
 import subprocess
-import solver_decoder
+#import solver_decoder
 import logging
 
 src_path = os.path.abspath(os.path.realpath(inspect.getfile(inspect.currentframe())))
@@ -51,52 +51,58 @@ else:
     hypergraph = Hypergraph.fromstream_dimacslike(sys.stdin)
 
 # Load solver and check permissions
-slv = solver_decoder.decode()
+slv = 'optimathsat' if not is_z3 else 'z3'
 
 # Launch SMT solver
 src_path = os.path.abspath(os.path.realpath(inspect.getfile(inspect.currentframe())))
 src_path = os.path.realpath(os.path.join(src_path, '..'))
 
-# Create temporary files
-inpf = open(inp_file, "w+")
-modelf = open(model_file, "w+")
-errorf = open(err_file, "w+")
+for htd in [False, True]:
+    # Create temporary files
+    inpf = open(inp_file, "w+")
+    modelf = open(model_file, "w+")
+    errorf = open(err_file, "w+")
 
-# Create encoding of the instance
-enc = frasmt_solver.FraSmtSolver(hypergraph, stream=inpf, checker_epsilon=None)
-enc.solve()
+    # Create encoding of the instance
+    enc = frasmt_solver.FraSmtSolver(hypergraph, stream=inpf, checker_epsilon=None)
+    enc.solve(htd=htd)
 
-# Solve using the SMT solver
-inpf.seek(0)
-if is_z3:
-    p1 = subprocess.Popen([slv, '-smt2', '-in'], stdin=inpf, stdout=modelf, stderr=errorf)
-else:
-    p1 = subprocess.Popen(slv, stdin=inpf, stdout=modelf, stderr=errorf, shell=True)
+    # Solve using the SMT solver
+    inpf.seek(0)
+    if is_z3:
+        p1 = subprocess.Popen([slv, '-smt2', '-in'], stdin=inpf, stdout=modelf, stderr=errorf)
+    else:
+        p1 = subprocess.Popen(slv, stdin=inpf, stdout=modelf, stderr=errorf, shell=True)
 
-p1.wait()
+    p1.wait()
 
-# Retrieve the result
-modelf.seek(0)
-errorf.seek(0)
-outp = modelf.read()
-errp = errorf.read()
+    # Retrieve the result
+    modelf.seek(0)
+    errorf.seek(0)
+    outp = modelf.read()
+    errp = errorf.read()
 
-inpf.close()
-modelf.close()
-errorf.close()
+    inpf.close()
+    modelf.close()
+    errorf.close()
 
-if len(errp) > 0:
-    raise RuntimeError(errp)
+    if len(errp) > 0:
+        raise RuntimeError(errp)
 
-# Load the resulting model
-res = enc.decode(outp, is_z3)
+    # Load the resulting model
+    res = enc.decode(outp, is_z3)
 
-# Display the HTD
-td = res['decomposition']
-num_edges = len(td.T.edges)
+    # Display the HTD
+    td = res['decomposition']
+
+    if td.validate(td.hypergraph):
+        break
 
 if not td.validate(td.hypergraph):
-    raise RuntimeError("Found a GHTD that is not a HTD")
+    raise RuntimeError(
+        "Found a GHTD that is not a HTD. HTD constraint holds {}".format(td.inverse_edge_function_holds()))
+
+num_edges = len(td.T.edges)
 
 sys.stdout.write('s htd {} {} {} {}\n'.format(len(td.bags), res['objective'], hypergraph.number_of_nodes(),
                                               # Last one is the number of hyperedges
