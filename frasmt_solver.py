@@ -289,7 +289,7 @@ class FraSmtSolver:
 
                 if i < j:
                     self.stream.write("(assert (=> arc_{i}_{j} share_var_{i}_{j}))\n".format(i=i, j=j))
-                    #self.stream.write("(assert (=> arc_{j}_{i} share_var_{i}_{j}))\n".format(i=i, j=j))
+                    self.stream.write("(assert (=> arc_{j}_{i} share_var_{i}_{j}))\n".format(i=i, j=j))
 
                     for k in xrange(1, n+1):
                         if k == i or k == j:
@@ -306,7 +306,7 @@ class FraSmtSolver:
         # Next, find the direct predecessor, i.e. the first descendant, and real descendants
         for i in xrange(1, n+1):
             vvars = []
-            self.stream.write("(assert bg_{i}_{i})\n".format(i=i))
+
             for j in xrange(1, n+1):
                 if i == j:
                     continue
@@ -322,9 +322,9 @@ class FraSmtSolver:
                     ordvar2 = tord(i, k)
                     ordvar3 = tord(j, k)
 
-                    self.stream.write("(assert (or {v1} {v2} {v3} (not {shv1}) (not {shv2}) (not is_pred_{i}_{k})))\n"
+                    self.stream.write("(assert (or {v1} {v2} {v3} (not {shv1}) (not is_pred_{i}_{k})))\n"
                                       .format(v1=ordvar1, v2=ordvar2, v3=ordvar3, i=i, j=j, k=k,
-                                              shv1=tshar(i, j), shv2=tshar(i, k)))
+                                              shv1=tshar(i, j)))
 
                     # Transitivity of real descendancy
                     self.stream.write("(assert (or (not is_desc_{i}_{j}) (not is_desc_{j}_{k}) is_desc_{i}_{k}))\n"

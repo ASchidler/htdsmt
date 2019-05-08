@@ -28,28 +28,26 @@ class HypertreeDecomposition(GeneralizedHypertreeDecomposition):
         return len(self.bags)
 
     @classmethod
-    def from_ordering(cls, hypergraph, ordering=None, weights=None, checker_epsilon=None, edges=None):
+    def from_ordering(cls, hypergraph, ordering=None, weights=None, checker_epsilon=None, edges=None, arcs=None):
+
         pgraph_view = HypergraphPrimalView(hypergraph=hypergraph)
         g = cls._from_ordering(hypergraph=pgraph_view, plot_if_td_invalid=False, ordering=ordering, weights=weights,
-                                  checker_epsilon=checker_epsilon)
+                                  checker_epsilon=checker_epsilon, edges=edges)
 
         g.hypergraph = hypergraph
 
-        if edges:
-            g.tree = DiGraph()
+        val = -1
 
-            for i, j in edges:
-                g.tree.add_edge(i, j)
+        for i in ordering:
+            cVal = 0
+            for _, v in weights[i].iteritems():
+                if v > 0:
+                    cVal += 1
+
+            val = cVal if val == -1 else max(val, cVal)
 
         # For the HTD the root is important. Try to find a root, that
         ug = g.tree.to_undirected()
-
-        r = None
-        # Find current r
-        for c_node in g.tree.nodes:
-            if g.tree.in_degree(c_node) == 0:
-                r = c_node
-                break
 
         # We have a ghtd, now try to repair it to a htd
         # Try each node as a root. Next try to repair the bags. This may not yield a valid decomposition
@@ -95,7 +93,36 @@ class HypertreeDecomposition(GeneralizedHypertreeDecomposition):
                         g.bags[u].update(missing)
                         changed = True
 
+                changed = changed or g.repair_connectedness()
         return g
+
+    def repair_connectedness(self):
+        w = self.width()
+        changed = False
+        for t in self.tree.nodes():
+            t_b = self._B(t)
+            if not (self.bags[t] <= t_b):
+                width = sum(self.hyperedge_function[t].itervalues())
+
+                if w - width > 0:
+                    residue = self.bags[t] - t_b
+                    changed = True
+                    val = w - width
+                    while val > 0 and len(residue) > 0:
+                        e = None
+                        e_val = -1
+                        for cE in (x for x, v in self.hyperedge_function[t].iteritems if v == 0):
+                            eVal = len(self.hypergraph.get_edge(cE) & residue)
+
+                            if eVal > e_val:
+                                e_val = eVal
+                                e = cE
+
+                        self.hyperedge_function[t][e] = 1
+                        residue = residue - self.hypergraph.get_edge(e_val)
+                        val -= 1
+
+        return changed
 
     def inverse_edge_function_holds(self):
         logging.info('=' * 80)
