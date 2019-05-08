@@ -6,7 +6,6 @@ import inspect
 import frasmt_solver
 import os
 import subprocess
-import solver_decoder
 import logging
 import time
 
@@ -41,9 +40,9 @@ logging.disable(logging.FATAL)
 #     solver_decoder.encode_os()
 
 # Load solver and check permissions
-slv = solver_decoder.decode()
+slv = 'optimathsat' if not is_z3 else 'z3'
 
-for i in xrange(131, 200, 2):
+for i in [109, 111]: # xrange(131, 200, 2):
     sys.stdout.write("Instance {}\n".format(i))
     file = "htd-exact-public/htd-exact_{:03d}.hgr".format(i)
     hypergraph = Hypergraph.from_file(file, fischl_format=False)
