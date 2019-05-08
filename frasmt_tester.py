@@ -43,7 +43,7 @@ logging.disable(logging.FATAL)
 # Load solver and check permissions
 slv = solver_decoder.decode()
 
-for i in [15,37,49,59,17]: #xrange(15, 200, 2):
+for i in xrange(131, 200, 2):
     sys.stdout.write("Instance {}\n".format(i))
     file = "htd-exact-public/htd-exact_{:03d}.hgr".format(i)
     hypergraph = Hypergraph.from_file(file, fischl_format=False)
@@ -52,7 +52,7 @@ for i in [15,37,49,59,17]: #xrange(15, 200, 2):
     src_path = os.path.abspath(os.path.realpath(inspect.getfile(inspect.currentframe())))
     src_path = os.path.realpath(os.path.join(src_path, '..'))
 
-    for htd in [False, True, None]:
+    for htd in [None]:
         # Create temporary files
         inpf = open(inp_file, "w+")
         modelf = open(model_file, "w+")
@@ -124,7 +124,7 @@ for i in [15,37,49,59,17]: #xrange(15, 200, 2):
             solved = (len(errp) == 0)
 
             # Load the resulting model
-            res = enc.decode(outp, is_z3)
+            res = enc.decode(outp, is_z3, htd=htd)
 
             # Display the HTD
             td = res['decomposition']

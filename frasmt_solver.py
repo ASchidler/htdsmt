@@ -261,7 +261,6 @@ class FraSmtSolver:
                     self.stream.write("(declare-const is_pred_{}_{} Bool)\n".format(i, j))
                     # Defines real descendants
                     self.stream.write("(declare-const is_desc_{}_{} Bool)\n".format(i, j))
-                    self.stream.write("(declare-const bg_{}_{} Bool)\n".format(i, j))
 
                     if i < j:
                         # Defines that two nodes share a variable
@@ -290,6 +289,7 @@ class FraSmtSolver:
 
                 if i < j:
                     self.stream.write("(assert (=> arc_{i}_{j} share_var_{i}_{j}))\n".format(i=i, j=j))
+                    #self.stream.write("(assert (=> arc_{j}_{i} share_var_{i}_{j}))\n".format(i=i, j=j))
 
                     for k in xrange(1, n+1):
                         if k == i or k == j:
@@ -313,7 +313,7 @@ class FraSmtSolver:
 
                 vvars.append("is_pred_{i}_{j}".format(i=i, j=j))
                 self.stream.write("(assert (=> is_pred_{i}_{j} is_desc_{i}_{j}))\n".format(i=i, j=j))
-                self.stream.write("(assert (=> (not arc_{i}_{j}) (not bg_{i}_{j}))\n".format(i=i, j=j))
+
                 for k in xrange(1, n+1):
                     if k == i or k == j:
                         continue
@@ -412,11 +412,11 @@ class FraSmtSolver:
         try:
             ordering = self._get_ordering(model)
             weights = self._get_weights(model, ordering)
-            edges = self._get_edges(model) if htd else None
-            arcs = self._get_arcs(model) if htd else None
+            #edges = self._get_edges(model) if htd else None
+            #arcs = self._get_arcs(model) if htd else None
             htd = HypertreeDecomposition.from_ordering(hypergraph=self.hypergraph, ordering=ordering,
                                                                   weights=weights,
-                                                                  checker_epsilon=self.__checker_epsilon, edges=edges, arcs=arcs)
+                                                                  checker_epsilon=self.__checker_epsilon)
 
         except KeyError as ee:
             sys.stdout.write("Error parsing output\n")

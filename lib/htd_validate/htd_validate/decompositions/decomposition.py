@@ -91,13 +91,18 @@ class Decomposition(object):
         pass
 
     @classmethod
-    def _from_ordering(cls, hypergraph, plot_if_td_invalid=True, ordering=None, weights=None, checker_epsilon=None):
+    def _from_ordering(cls, hypergraph, plot_if_td_invalid=True, ordering=None, weights=None, checker_epsilon=None, edges=None):
         if ordering is None:
             ordering = sorted(hypergraph.nodes())
 
         tree = nx.DiGraph()
-        # use lex smallest, python first compares first pos of tuple
-        smallest = lambda x: min([(ordering.index(xi), xi) for xi in x])
+        smallest = lambda A: min([(ordering.index(xi), xi) for xi in A])
+
+        if edges is None:
+            nxtn = lambda v, A: smallest(A)[1]
+        else:
+            nxtn = lambda v, A: \
+                next(iter([x[0] for x in edges if x[1] == v] + [None]))
 
         # initialize with empty bags
         chi = {v: set() for v in hypergraph.nodes()}
@@ -114,11 +119,12 @@ class Decomposition(object):
                 logging.debug("A(before-rem) = %s" % A)
                 A.remove(v)
                 logging.debug("A(after-rem) = %s" % A)
-                nxt = smallest(A)[1]
-                logging.debug("nxt =%s, v=%s, A=%s, chi[nxt]=%s" % (nxt, v, A, chi[nxt]))
-                chi[nxt].update(A)
-                logging.debug("chi[nxt]=%s" % chi[nxt])
-                tree.add_edge(nxt, v)
+                nxt = nxtn(v, A)
+                if nxt is not None:
+                    logging.debug("nxt =%s, v=%s, A=%s, chi[nxt]=%s" % (nxt, v, A, chi[nxt]))
+                    chi[nxt].update(A)
+                    logging.debug("chi[nxt]=%s" % chi[nxt])
+                    tree.add_edge(nxt, v)
         ret = cls(hypergraph=hypergraph, plot_if_td_invalid=plot_if_td_invalid, tree=tree, bags=chi,
                   hyperedge_function=weights, epsilon=checker_epsilon)
         return ret
