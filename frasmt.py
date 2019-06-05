@@ -21,6 +21,7 @@ if src_path not in sys.path:
         sys.path.insert(0, os.path.join(src_path, lib))
 
 from htd_validate import Hypergraph
+from htd_validate.decompositions import GeneralizedHypertreeDecomposition
 
 # End of imports
 # Use z3 or mathsat?
@@ -57,7 +58,7 @@ slv = 'optimathsat' if not is_z3 else 'z3'
 src_path = os.path.abspath(os.path.realpath(inspect.getfile(inspect.currentframe())))
 src_path = os.path.realpath(os.path.join(src_path, '..'))
 
-for htd in [False, True]:
+for htd in [True]:
     # Create temporary files
     inpf = open(inp_file, "w+")
     modelf = open(model_file, "w+")
@@ -90,7 +91,7 @@ for htd in [False, True]:
         raise RuntimeError(errp)
 
     # Load the resulting model
-    res = enc.decode(outp, is_z3)
+    res = enc.decode(outp, is_z3, htd=htd)
 
     # Display the HTD
     td = res['decomposition']
@@ -99,9 +100,6 @@ for htd in [False, True]:
         break
 
 
-if not td.validate(td.hypergraph):
-    raise RuntimeError(
-        "Found a GHTD that is not a HTD. HTD constraint holds {}".format(td.inverse_edge_function_holds()))
 
 num_edges = len(td.T.edges)
 
@@ -126,3 +124,7 @@ for v1, vals in td.hyperedge_function.iteritems():
     for v2, val in vals.iteritems():
         sys.stdout.write('w {} {} {}\n'. format(v1, v2, val))
 
+if not td.validate(td.hypergraph):
+    raise RuntimeError(
+        "Found a GHTD that is not a HTD. HTD constraint holds {}, GHTD holds {}".format(td.inverse_edge_function_holds(),
+                                                                                        GeneralizedHypertreeDecomposition.validate(td, td.hypergraph)))

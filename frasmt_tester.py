@@ -1,7 +1,6 @@
 from __future__ import absolute_import
 
 import sys
-import select
 import inspect
 import frasmt_solver
 import os
@@ -42,7 +41,7 @@ logging.disable(logging.FATAL)
 # Load solver and check permissions
 slv = 'optimathsat' if not is_z3 else 'z3'
 
-for i in [109, 111]: # xrange(131, 200, 2):
+for i in xrange(1, 200, 2):
     sys.stdout.write("Instance {}\n".format(i))
     file = "htd-exact-public/htd-exact_{:03d}.hgr".format(i)
     hypergraph = Hypergraph.from_file(file, fischl_format=False)
@@ -51,7 +50,7 @@ for i in [109, 111]: # xrange(131, 200, 2):
     src_path = os.path.abspath(os.path.realpath(inspect.getfile(inspect.currentframe())))
     src_path = os.path.realpath(os.path.join(src_path, '..'))
 
-    for htd in [None]:
+    for htd in [False, True]:
         # Create temporary files
         inpf = open(inp_file, "w+")
         modelf = open(model_file, "w+")
@@ -123,7 +122,7 @@ for i in [109, 111]: # xrange(131, 200, 2):
             solved = (len(errp) == 0)
 
             # Load the resulting model
-            res = enc.decode(outp, is_z3, htd=htd)
+            res = enc.decode(outp, is_z3)
 
             # Display the HTD
             td = res['decomposition']

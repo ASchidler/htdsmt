@@ -6,7 +6,7 @@ import re
 import os
 import sys
 import inspect
-
+from networkx.algorithms.dag import descendants
 
 src_path = os.path.abspath(os.path.realpath(inspect.getfile(inspect.currentframe())))
 sys.path.insert(0, os.path.realpath(os.path.join(src_path, '..')))
@@ -187,16 +187,16 @@ class FraSmtSolver:
                     self.stream.write(
                         "(assert (=> arc_{i}_{j} (>= {weights} 1)))\n".format(i=i, j=j, weights=weights[0]))
 
-                # arc_ij then i most be covered by some edge (because i will end up in one bag)
-                weights = []
-                for e in self.hypergraph.incident_edges(i):
-                    weights.append("weight_{i}_e{e}".format(i=i, e=e))
+            # arc_ij then i most be covered by some edge (because i will end up in one bag)
+            weights = []
+            for e in self.hypergraph.incident_edges(i):
+                weights.append("weight_{i}_e{e}".format(i=i, e=e))
 
-                if len(weights) > 1:
-                    self.stream.write(
-                        "(assert (>= (+ {weights}) 1))\n".format(weights=" ".join(weights)))
-                elif len(weights) == 1:
-                    self.stream.write("(assert (>= {} 1))\n".format(weights[0]))
+            if len(weights) > 1:
+                self.stream.write(
+                    "(assert (>= (+ {weights}) 1))\n".format(weights=" ".join(weights)))
+            elif len(weights) == 1:
+                self.stream.write("(assert (>= {} 1))\n".format(weights[0]))
 
     def break_clique(self, clique):
         if clique:
@@ -241,7 +241,7 @@ class FraSmtSolver:
     def encode_htd(self, n):
 
         def tord(ix, jx):
-            return '(not ord_{}_{})'.format(ix, jx) if ix < jx else 'ord_{}_{}'.format(jx, ix)
+            return 'ord_{}_{}'.format(ix, jx) if ix < jx else '(not ord_{}_{})'.format(jx, ix)
 
         def tshar(ix, jx):
             return "share_var_{}_{}".format(ix, jx) if ix < jx else "share_var_{}_{}".format(jx, ix)
@@ -288,8 +288,11 @@ class FraSmtSolver:
                 ordvar = tord(i, j)
 
                 if i < j:
+                    vars = []
                     self.stream.write("(assert (=> arc_{i}_{j} share_var_{i}_{j}))\n".format(i=i, j=j))
                     self.stream.write("(assert (=> arc_{j}_{i} share_var_{i}_{j}))\n".format(i=i, j=j))
+                    self.stream.write("(assert (or (not share_var_{i}_{j}) is_desc_{i}_{j} is_desc_{j}_{i}))\n".format(i=i, j=j))
+                    self.stream.write("(assert (or (not is_desc_{i}_{j}) (not is_desc_{j}_{i})))\n".format(i=i, j=j))
 
                     for k in xrange(1, n+1):
                         if k == i or k == j:
@@ -298,6 +301,11 @@ class FraSmtSolver:
                         # Other possibility, i is before j and they share another variable
                         self.stream.write("(assert (or (not arc_{i}_{k}) (not arc_{j}_{k}) share_var_{i}_{j}))\n"
                                           .format(i=i, j=j, k=k))
+                        vars.append("(and arc_{i}_{k} arc_{j}_{k})".format(i=i, j=j, k=k))
+
+                    # If no variable is shared, set share var to false
+                    self.stream.write("(assert (or (not share_var_{i}_{j}) arc_{i}_{j} arc_{j}_{i} {vars}))\n"
+                                      .format(i=i, j=j, vars=" ".join(vars)))
 
                 self.stream.write("(assert (=> (not {shv}) (not is_pred_{i}_{j})))\n".format(i=i, j=j, shv=tshar(i, j)))
                 self.stream.write("(assert (=> {ordvar} (not is_pred_{i}_{j})))\n".format(ordvar=ordvar, i=i, j=j))
@@ -313,6 +321,7 @@ class FraSmtSolver:
 
                 vvars.append("is_pred_{i}_{j}".format(i=i, j=j))
                 self.stream.write("(assert (=> is_pred_{i}_{j} is_desc_{i}_{j}))\n".format(i=i, j=j))
+                self.stream.write("(assert (=> is_pred_{i}_{j} (not is_desc_{j}_{i})))\n".format(i=i, j=j))
 
                 for k in xrange(1, n+1):
                     if k == i or k == j:
@@ -326,8 +335,10 @@ class FraSmtSolver:
                                       .format(v1=ordvar1, v2=ordvar2, v3=ordvar3, i=i, j=j, k=k,
                                               shv1=tshar(i, j)))
 
-                    # Transitivity of real descendancy
+                    # Transitivity of real descendency
                     self.stream.write("(assert (or (not is_desc_{i}_{j}) (not is_desc_{j}_{k}) is_desc_{i}_{k}))\n"
+                                      .format(i=i, j=j, k=k))
+                    self.stream.write("(assert (or (not is_pred_{i}_{j}) (not is_pred_{k}_{j}) (not is_desc_{i}_{k})))\n"
                                       .format(i=i, j=j, k=k))
 
             # A node is either the root, or it has a successor
@@ -409,20 +420,27 @@ class FraSmtSolver:
                 else:
                     model[nm] = int(val)
 
-        try:
-            ordering = self._get_ordering(model)
-            weights = self._get_weights(model, ordering)
-            #edges = self._get_edges(model) if htd else None
-            #arcs = self._get_arcs(model) if htd else None
-            htd = HypertreeDecomposition.from_ordering(hypergraph=self.hypergraph, ordering=ordering,
-                                                                  weights=weights,
-                                                                  checker_epsilon=self.__checker_epsilon)
+        #try:
+        ordering = self._get_ordering(model)
+        weights = self._get_weights(model, ordering)
+        edges = self._get_edges(model) if htd else None
+        arcs = self._get_arcs(model) if htd else None
+        htd = HypertreeDecomposition.from_ordering(hypergraph=self.hypergraph, ordering=ordering,
+                                                              weights=weights,
+                                                              checker_epsilon=self.__checker_epsilon, edges=edges, arcs=arcs)
 
-        except KeyError as ee:
-            sys.stdout.write("Error parsing output\n")
-            sys.stdout.write(output)
-            sys.stdout.write("\n")
-            raise ee
+        # if arcs:
+        #     desc = self._get_desc(model)
+        #     for n in htd.tree.nodes:
+        #         actual = set(descendants(htd.tree, n))
+        #         if len(desc[n]) != len(actual) or len(desc[n]-actual) > 0:
+        #             print "Failed on node {}, mismatch".format(n, desc[n] - actual)
+
+        # except KeyError as ee:
+        #     sys.stdout.write("Error parsing output\n")
+        #     sys.stdout.write(output)
+        #     sys.stdout.write("\n")
+        #     raise ee
 
         ret.update({"objective": htd.width(), "decomposition": htd})
         # if not htd.validate(self.hypergraph):
@@ -477,9 +495,24 @@ class FraSmtSolver:
 
         for i in xrange(1, n+1):
             ret[i] = {}
-            ret[i][i] = True
+            #ret[i][i] = True
             for j in xrange(1, n+1):
-                if i != j:
-                    ret[i][j] = model["arc_{}_{}".format(i, j)]
+                #if i != j:
+                ret[i][j] = model["arc_{}_{}".format(i, j)]
 
         return ret
+
+    def _get_desc(self, model):
+        n = self.hypergraph.number_of_nodes()
+        desc = {}
+        for i in xrange(1, n+1):
+            val = set()
+            for j in xrange(1, n+1):
+                if i == j:
+                    continue
+
+                if model["is_desc_{}_{}".format(j, i)]:
+                    val.add(j)
+            desc[i] = val
+
+        return desc
