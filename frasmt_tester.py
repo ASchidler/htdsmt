@@ -24,7 +24,7 @@ from htd_validate.decompositions import GeneralizedHypertreeDecomposition
 
 # End of imports
 # Use z3 or mathsat?
-is_z3 = True
+is_z3 = False
 # Filenames and paths to use
 inp_file = '/tmp/slv.encode'
 model_file = '/tmp/slv.model'

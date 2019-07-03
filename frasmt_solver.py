@@ -256,8 +256,7 @@ class FraSmtSolver:
                 for e in self.hypergraph.incident_edges(j):
                     vvars.append("(> weight_{i}_e{e} 0)".format(i=i, e=e))
                     self.stream.write("(assert (=> (= weight_{i}_e{e} 1) covers_{i}_{j}))\n".format(i=i, j=j, e=e))
-                #self.stream.write("(assert (=> (>= (+ {weights}) 1) covers_{i}_{j}))\n".format(i=i, j=j, weights=" ".join(vvars)))
-                #self.stream.write("(assert (or (not covers_{i}_{j}) {vvars}))\n".format(vvars=" ".join(vvars), i=i, j=j))
+                self.stream.write("(assert (or (not covers_{i}_{j}) {vvars}))\n".format(vvars=" ".join(vvars), i=i, j=j))
 
         # Establish root
         for i in xrange(1, n + 1):
@@ -294,8 +293,8 @@ class FraSmtSolver:
                 # No node shared, or is smaller (in terms of the orderign) -> no predecessor
                 self.stream.write("(assert (=> (not arc_{i}_{j}) (not is_pred_{i}_{j})))\n".format(i=i, j=j))
                 self.stream.write("(assert (=> {ordvar} (not is_pred_{j}_{i})))\n".format(ordvar=ordvar, i=i, j=j))
-                # If there is a smaller node with a shared variable in between -> no predecessor
 
+                # If there is a smaller node with a shared variable in between -> no predecessor
                 for k in xrange(1, n+1):
                     if k == i or k == j:
                         continue
@@ -344,17 +343,18 @@ class FraSmtSolver:
                 if i == j:
                     continue
 
-                # self.stream.write(
-                #     "(assert (or (not is_desc_{i}_{j}) arc_{j}_{i} (not covers_{j}_{i})))\n"
-                #     .format(i=i, j=j))
-                #
-                # for k in xrange(1, n + 1):
-                #     if k == i or k == j:
-                #         continue
-                #
-                #     self.stream.write(
-                #         "(assert (or (not is_desc_{i}_{j}) (not arc_{i}_{k}) arc_{j}_{k} (not covers_{j}_{k})))\n"
-                #         .format(i=i, j=j, k=k))
+                self.stream.write(
+                    "(assert (or (not is_desc_{i}_{j}) (not covers_{j}_{i})))\n"
+                    .format(i=i, j=j))
+
+                for k in xrange(1, n + 1):
+                    if k == i or k == j:
+                        continue
+                    ordvar1 = tord(i, k)
+                    ordvar2 = tord(j, k)
+                    self.stream.write(
+                        "(assert (or (not is_desc_{i}_{j}) (not arc_{i}_{k}) (not covers_{j}_{k}) (not {v1}) (and {v2} arc_{j}_{k})))\n"
+                        .format(i=i, j=j, k=k, v1=ordvar1, v2=ordvar2))
 
     def encode(self, clique=None, twins=None, htd=True):
         n = self.hypergraph.number_of_nodes()
@@ -420,17 +420,20 @@ class FraSmtSolver:
         edges = self._get_edges(model) if htd else None
         arcs = self._get_arcs(model) #if htd else None
         #edges = None
+        #arcs = None
+        #edges = None
 
-        htd = HypertreeDecomposition.from_ordering(hypergraph=self.hypergraph, ordering=ordering,
+        htdd = HypertreeDecomposition.from_ordering(hypergraph=self.hypergraph, ordering=ordering,
                                                               weights=weights,
                                                               checker_epsilon=self.__checker_epsilon, edges=edges, arcs=arcs)
 
-        # if arcs:
-        #     desc = self._get_desc(model)
-        #     for n in htd.tree.nodes:
-        #         actual = set(descendants(htd.tree, n))
-        #         if len(desc[n]) != len(actual) or len(desc[n]-actual) > 0:
-        #             print "Failed on node {}, mismatch".format(n, desc[n] - actual)
+        # Debug, verify if the descendent relation is correct
+        if htd:
+            desc = self._get_desc(model)
+            for n in htdd.tree.nodes:
+                actual = set(descendants(htdd.tree, n))
+                if len(desc[n]) != len(actual) or len(desc[n]-actual) > 0:
+                    print "Failed on node {}, mismatch".format(n, desc[n] - actual)
 
         # except KeyError as ee:
         #     sys.stdout.write("Error parsing output\n")
@@ -438,7 +441,7 @@ class FraSmtSolver:
         #     sys.stdout.write("\n")
         #     raise ee
 
-        ret.update({"objective": htd.width(), "decomposition": htd})
+        ret.update({"objective": htdd.width(), "decomposition": htdd})
         # if not htd.validate(self.hypergraph):
         #     raise RuntimeError("Found a GHTD that is not a HTD")
 

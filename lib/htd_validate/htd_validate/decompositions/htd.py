@@ -58,40 +58,48 @@ class HypertreeDecomposition(GeneralizedHypertreeDecomposition):
             for i, j in edges:
                 sys.stdout.write("e {} {}\n".format(i, j))
 
-        if arcs:
-            g.bags = {}
-            for i in ordering:
-                g.bags[i] = set()
-                for j in ordering:
-                    if arcs[i][j]:
-                        g.bags[i].add(j)
+        # if arcs:
+        #     g.bags = {}
+        #     for i in ordering:
+        #         g.bags[i] = set()
+        #         for j in ordering:
+        #             if arcs[i][j]:
+        #                 g.bags[i].add(j)
+        #
+        #     g.tree = DiGraph()
+        #     if edges:
+        #         for i, j in edges:
+        #             g.tree.add_edge(i, j)
+        #     else:
+        #
+        #         smallest = lambda A: min([(ordering.index(xi), xi) for xi in A])
+        #
+        #         nxtn = lambda A: smallest(A)[1]
+        #
+        #         for l in ordering:
+        #             cA = set(g.bags[l])
+        #             cA.remove(l)
+        #             if cA:
+        #                 n = nxtn(cA)
+        #                 if n is not None and ordering.index(l) < ordering.index(n):
+        #                     g.tree.add_edge(n, l)
+        #                     sys.stdout.write("{} {}\n".format(n, l))
+        #
+        #     for n in g.tree.nodes:
+        #         print "{}:\t{}".format(n, g.bags[n])
+        #
+        #     return g
 
-            g.tree = DiGraph()
-            if edges:
-                for i, j in edges:
-                    g.tree.add_edge(i, j)
-            else:
+        print ordering
 
-                smallest = lambda A: min([(ordering.index(xi), xi) for xi in A])
-
-                nxtn = lambda A: smallest(A)[1]
-
-                for l in ordering:
-                    cA = set(g.bags[l])
-                    cA.remove(l)
-                    if cA:
-                        n = nxtn(cA)
-                        if n is not None and ordering.index(l) < ordering.index(n):
-                            g.tree.add_edge(n, l)
-                            sys.stdout.write("{} {}\n".format(n, l))
-
-            for n in g.tree.nodes:
-                print "{}:\t{}".format(n, g.bags[n])
-
-            return g
-
+        tst = {}
+        for i in ordering:
+            tst[i] = set()
+            for j in ordering:
+                if arcs[i][j]:
+                    tst[i].add(j)
         for n in g.tree.nodes:
-            print "{}:\t{}".format(n, g.bags[n])
+            print "{}:\t{}\t{}".format(n, g.bags[n], tst[n])
 
         for i, j in g.tree.edges:
             print "{} {}".format(i, j)
