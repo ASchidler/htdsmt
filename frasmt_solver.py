@@ -156,7 +156,7 @@ class FraSmtSolver:
                     # AS CLAUSE
                     self.add_clause([-self.arc[i][j], -self.arc[i][l], -self.ord[j][l], self.arc[j][l]])
                     self.add_clause([-self.arc[i][j], -self.arc[i][l], self.ord[j][l], self.arc[l][j]])
-                    # redunant
+                    # redundant
                     self.add_clause([-self.arc[i][j], -self.arc[i][l], self.arc[j][l], self.arc[l][j]])
 
         # forbid self loops
@@ -243,106 +243,100 @@ class FraSmtSolver:
         def tord(ix, jx):
             return 'ord_{}_{}'.format(ix, jx) if ix < jx else '(not ord_{}_{})'.format(jx, ix)
 
-        def tshar(ix, jx):
-            return "share_var_{}_{}".format(ix, jx) if ix < jx else "share_var_{}_{}".format(jx, ix)
-
         vvars = []
-        # Define variables
+
+        # # Whenever a tree node covers an edge, it covers all of the edge's vertices
         for i in xrange(1, n+1):
-            # Defines the root node
+            for j in xrange(1, n + 1):
+                self.stream.write("(declare-const covers_{}_{} Bool)\n".format(i, j))
+
+        for i in xrange(1, n + 1):
+            for j in xrange(1, n + 1):
+                vvars = []
+                for e in self.hypergraph.incident_edges(j):
+                    vvars.append("(> weight_{i}_e{e} 0)".format(i=i, e=e))
+                    self.stream.write("(assert (=> (= weight_{i}_e{e} 1) covers_{i}_{j}))\n".format(i=i, j=j, e=e))
+                #self.stream.write("(assert (=> (>= (+ {weights}) 1) covers_{i}_{j}))\n".format(i=i, j=j, weights=" ".join(vvars)))
+                #self.stream.write("(assert (or (not covers_{i}_{j}) {vvars}))\n".format(vvars=" ".join(vvars), i=i, j=j))
+
+        # Establish root
+        for i in xrange(1, n + 1):
             self.stream.write("(declare-const is_root_{} Bool)\n".format(i))
             vvars.append("is_root_{}".format(i))
 
-            for j in xrange(1, n+1):
-                # Defines which node covers which vertex
-                self.stream.write("(declare-const covers_{}_{} Bool)\n".format(i, j))
-                if i != j:
-                    # Defines predecessor vertices
-                    self.stream.write("(declare-const is_pred_{}_{} Bool)\n".format(i, j))
-                    # Defines real descendants
-                    self.stream.write("(declare-const is_desc_{}_{} Bool)\n".format(i, j))
+            # Smaller nodes cannot be root
+            for j in xrange(1, n + 1):
+                if i == j:
+                    continue
 
-                    if i < j:
-                        # Defines that two nodes share a variable
-                        self.stream.write("(declare-const share_var_{}_{} Bool)\n".format(i, j))
+                ordvar = tord(i, j)
+                self.stream.write("(assert (=> {ordvar} (not is_root_{i})))\n".format(ordvar=ordvar, i=i))
 
         # There has to be a root
         self.stream.write("(assert (or {vvars}))\n".format(vvars=" ".join(vvars)))
 
-        # Whenever a tree node covers an edge, it covers all of the edge's vertices
-        for i in xrange(1, n+1):
-            for j in xrange(1, n + 1):
-                for e in self.hypergraph.incident_edges(j):
-                    self.stream.write("(assert (=> (> weight_{i}_e{e} 0) covers_{i}_{j}))\n".format(i=i, j=j, e=e))
-
-        # Next determine potential descendancy, i.e. those nodes that are left and share some variable
-        # Potential, since they may still end up in different branches
-
+        # Establish predecessor
         for i in xrange(1, n+1):
             for j in xrange(1, n+1):
                 if i == j:
                     continue
 
-                # i is before, at therefore potential descendant
-                # The negation is reversed, to avoid double negation in the next clause
-                ordvar = tord(i, j)
+                self.stream.write("(declare-const is_pred_{}_{} Bool)\n".format(i, j))
 
-                if i < j:
-                    vars = []
-                    self.stream.write("(assert (=> arc_{i}_{j} share_var_{i}_{j}))\n".format(i=i, j=j))
-                    self.stream.write("(assert (=> arc_{j}_{i} share_var_{i}_{j}))\n".format(i=i, j=j))
-                    self.stream.write("(assert (or (not share_var_{i}_{j}) is_desc_{i}_{j} is_desc_{j}_{i}))\n".format(i=i, j=j))
-                    self.stream.write("(assert (or (not is_desc_{i}_{j}) (not is_desc_{j}_{i})))\n".format(i=i, j=j))
-
-                    for k in xrange(1, n+1):
-                        if k == i or k == j:
-                            continue
-
-                        # Other possibility, i is before j and they share another variable
-                        self.stream.write("(assert (or (not arc_{i}_{k}) (not arc_{j}_{k}) share_var_{i}_{j}))\n"
-                                          .format(i=i, j=j, k=k))
-                        vars.append("(and arc_{i}_{k} arc_{j}_{k})".format(i=i, j=j, k=k))
-
-                    # If no variable is shared, set share var to false
-                    self.stream.write("(assert (or (not share_var_{i}_{j}) arc_{i}_{j} arc_{j}_{i} {vars}))\n"
-                                      .format(i=i, j=j, vars=" ".join(vars)))
-
-                self.stream.write("(assert (=> (not {shv}) (not is_pred_{i}_{j})))\n".format(i=i, j=j, shv=tshar(i, j)))
-                self.stream.write("(assert (=> {ordvar} (not is_pred_{i}_{j})))\n".format(ordvar=ordvar, i=i, j=j))
-                self.stream.write("(assert (=> (not {ordvar}) (not is_root_{i})))\n".format(ordvar=ordvar, i=i))
-
-        # Next, find the direct predecessor, i.e. the first descendant, and real descendants
-        for i in xrange(1, n+1):
+        for i in xrange(1, n + 1):
             vvars = []
-
-            for j in xrange(1, n+1):
+            for j in xrange(1, n + 1):
                 if i == j:
                     continue
-
+                ordvar = tord(i, j)
                 vvars.append("is_pred_{i}_{j}".format(i=i, j=j))
-                self.stream.write("(assert (=> is_pred_{i}_{j} is_desc_{i}_{j}))\n".format(i=i, j=j))
-                self.stream.write("(assert (=> is_pred_{i}_{j} (not is_desc_{j}_{i})))\n".format(i=i, j=j))
+
+                # No node shared, or is smaller (in terms of the orderign) -> no predecessor
+                self.stream.write("(assert (=> (not arc_{i}_{j}) (not is_pred_{i}_{j})))\n".format(i=i, j=j))
+                self.stream.write("(assert (=> {ordvar} (not is_pred_{j}_{i})))\n".format(ordvar=ordvar, i=i, j=j))
+                # If there is a smaller node with a shared variable in between -> no predecessor
 
                 for k in xrange(1, n+1):
                     if k == i or k == j:
                         continue
 
-                    ordvar1 = tord(i, j)
-                    ordvar2 = tord(i, k)
-                    ordvar3 = tord(j, k)
+                    ordvar2 = tord(j, k)
 
-                    self.stream.write("(assert (or {v1} {v2} {v3} (not {shv1}) (not is_pred_{i}_{k})))\n"
-                                      .format(v1=ordvar1, v2=ordvar2, v3=ordvar3, i=i, j=j, k=k,
-                                              shv1=tshar(i, j)))
+                    self.stream.write("(assert (or (not arc_{i}_{j}) (not {v1}) (not {v2}) (not is_pred_{i}_{k})))\n"
+                                      .format(v2=ordvar2, v1=ordvar, i=i, j=j, k=k,
+                                              ))
+
+            # A node is either the root, or it has a predecessor
+            self.stream.write("(assert (or is_root_{i} {vvars}))\n".format(vvars=" ".join(vvars), i=i))
+
+        # Establish descendents
+        for i in xrange(1, n + 1):
+            for j in xrange(1, n + 1):
+                if i == j:
+                    continue
+
+                self.stream.write("(declare-const is_desc_{}_{} Bool)\n".format(i, j))
+
+        for i in xrange(1, n + 1):
+            for j in xrange(1, n + 1):
+                if i == j:
+                    continue
+
+                ordvar = tord(i, j)
+                self.stream.write("(assert (=> is_pred_{i}_{j} is_desc_{i}_{j}))\n".format(i=i, j=j))
+                self.stream.write("(assert (=> {ordvar} (not is_desc_{j}_{i})))\n".format(i=i, j=j, ordvar=ordvar))
+
+                for k in xrange(1, n+1):
+                    if k == i or k == j:
+                        continue
 
                     # Transitivity of real descendency
                     self.stream.write("(assert (or (not is_desc_{i}_{j}) (not is_desc_{j}_{k}) is_desc_{i}_{k}))\n"
-                                      .format(i=i, j=j, k=k))
+                                       .format(i=i, j=j, k=k))
                     self.stream.write("(assert (or (not is_pred_{i}_{j}) (not is_pred_{k}_{j}) (not is_desc_{i}_{k})))\n"
+                                       .format(i=i, j=j, k=k))
+                    self.stream.write("(assert (or (not is_desc_{i}_{k}) (not is_desc_{j}_{k}) is_desc_{i}_{j} is_desc_{j}_{i}))\n"
                                       .format(i=i, j=j, k=k))
-
-            # A node is either the root, or it has a successor
-            self.stream.write("(assert (or is_root_{i} {vvars}))\n".format(vvars=" ".join(vvars), i=i))
 
         # Finally verify the constraint
         for i in xrange(1, n+1):
@@ -350,17 +344,17 @@ class FraSmtSolver:
                 if i == j:
                     continue
 
-                self.stream.write(
-                    "(assert (or (not is_desc_{i}_{j}) arc_{j}_{i} (not covers_{j}_{i})))\n"
-                    .format(i=i, j=j))
-
-                for k in xrange(1, n + 1):
-                    if k == i or k == j:
-                        continue
-
-                    self.stream.write(
-                        "(assert (or (not is_desc_{i}_{j}) (not arc_{i}_{k}) arc_{j}_{k} (not covers_{j}_{k})))\n"
-                        .format(i=i, j=j, k=k))
+                # self.stream.write(
+                #     "(assert (or (not is_desc_{i}_{j}) arc_{j}_{i} (not covers_{j}_{i})))\n"
+                #     .format(i=i, j=j))
+                #
+                # for k in xrange(1, n + 1):
+                #     if k == i or k == j:
+                #         continue
+                #
+                #     self.stream.write(
+                #         "(assert (or (not is_desc_{i}_{j}) (not arc_{i}_{k}) arc_{j}_{k} (not covers_{j}_{k})))\n"
+                #         .format(i=i, j=j, k=k))
 
     def encode(self, clique=None, twins=None, htd=True):
         n = self.hypergraph.number_of_nodes()
@@ -424,7 +418,9 @@ class FraSmtSolver:
         ordering = self._get_ordering(model)
         weights = self._get_weights(model, ordering)
         edges = self._get_edges(model) if htd else None
-        arcs = self._get_arcs(model) if htd else None
+        arcs = self._get_arcs(model) #if htd else None
+        #edges = None
+
         htd = HypertreeDecomposition.from_ordering(hypergraph=self.hypergraph, ordering=ordering,
                                                               weights=weights,
                                                               checker_epsilon=self.__checker_epsilon, edges=edges, arcs=arcs)
@@ -495,10 +491,10 @@ class FraSmtSolver:
 
         for i in xrange(1, n+1):
             ret[i] = {}
-            #ret[i][i] = True
+            ret[i][i] = True
             for j in xrange(1, n+1):
-                #if i != j:
-                ret[i][j] = model["arc_{}_{}".format(i, j)]
+                if i != j:
+                    ret[i][j] = model["arc_{}_{}".format(i, j)]
 
         return ret
 

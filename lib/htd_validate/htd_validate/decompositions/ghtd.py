@@ -167,7 +167,7 @@ class GeneralizedHypertreeDecomposition(Decomposition):
         if self.is_tree(strict=strict) and self.edges_covered() and self.is_connected() and self.edge_function_holds():
             return True
         else:
-            sys.stdout.write("GHTD validate failed. Tree {}, Covered {}, Connected {}, Edge Function {}".format(
+            sys.stdout.write("GHTD validate failed. Tree {}, Covered {}, Connected {}, Edge Function {}\n".format(
                 self.is_tree(
                     strict=strict), self.edges_covered(), self.is_connected(), self.edge_function_holds()
             ))

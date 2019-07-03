@@ -54,55 +54,96 @@ class HypertreeDecomposition(GeneralizedHypertreeDecomposition):
         #
         #     return g
 
+        if edges:
+            for i, j in edges:
+                sys.stdout.write("e {} {}\n".format(i, j))
+
+        if arcs:
+            g.bags = {}
+            for i in ordering:
+                g.bags[i] = set()
+                for j in ordering:
+                    if arcs[i][j]:
+                        g.bags[i].add(j)
+
+            g.tree = DiGraph()
+            if edges:
+                for i, j in edges:
+                    g.tree.add_edge(i, j)
+            else:
+
+                smallest = lambda A: min([(ordering.index(xi), xi) for xi in A])
+
+                nxtn = lambda A: smallest(A)[1]
+
+                for l in ordering:
+                    cA = set(g.bags[l])
+                    cA.remove(l)
+                    if cA:
+                        n = nxtn(cA)
+                        if n is not None and ordering.index(l) < ordering.index(n):
+                            g.tree.add_edge(n, l)
+                            sys.stdout.write("{} {}\n".format(n, l))
+
+            for n in g.tree.nodes:
+                print "{}:\t{}".format(n, g.bags[n])
+
+            return g
+
+        for n in g.tree.nodes:
+            print "{}:\t{}".format(n, g.bags[n])
+
+        for i, j in g.tree.edges:
+            print "{} {}".format(i, j)
 
         # For the HTD the root is important. Try to find a root, that
-        ug = g.tree.to_undirected()
-
-        # We have a ghtd, now try to repair it to a htd
-        # Try each node as a root. Next try to repair the bags. This may not yield a valid decomposition
-        queue = [nd for nd in g.tree.nodes]
-        bag_copy = None
-
-        while True:
-            if g.validate(hypergraph):
-                break
-
-            if len(queue) == 0:
-                break
-
-            if bag_copy is not None:
-                g.bags = bag_copy
-
-            r = queue.pop()
-            g.tree = DiGraph()
-            g.tree.add_node(r)
-            bag_copy = {}
-            for k, v in g.bags.iteritems():
-                bag_copy[k] = set(v)
-
-            dfs_q = [r]
-
-            while dfs_q:
-                c_n = dfs_q.pop()
-                for o_n in ug.neighbors(c_n):
-                    if o_n not in g.tree.nodes:
-                        g.tree.add_edge(c_n, o_n)
-                        dfs_q.append(o_n)
-
-            changed = True
-            while changed:
-                changed = False
-                for u in g.tree.nodes:
-                    T_u = dfs_tree(g.tree, u)
-                    vertices_in_bags_below_u = set()
-                    for t in T_u.nodes():
-                        vertices_in_bags_below_u.update(g.bags[t])
-                    missing = (vertices_in_bags_below_u & g._B(u)) - g.bags[u]
-                    if len(missing) > 0:
-                        g.bags[u].update(missing)
-                        changed = True
-
-                changed = changed or g.repair_connectedness()
+        # ug = g.tree.to_undirected()
+        #
+        # # We have a ghtd, now try to repair it to a htd
+        # # Try each node as a root. Next try to repair the bags. This may not yield a valid decomposition
+        # queue = [nd for nd in g.tree.nodes]
+        # bag_copy = None
+        #
+        # while True:
+        #     if g.validate(hypergraph):
+        #         break
+        #
+        #     if len(queue) == 0:
+        #         break
+        #
+        #     if bag_copy is not None:
+        #         g.bags = bag_copy
+        #
+        #     r = queue.pop()
+        #     g.tree = DiGraph()
+        #     g.tree.add_node(r)
+        #     bag_copy = {}
+        #     for k, v in g.bags.iteritems():
+        #         bag_copy[k] = set(v)
+        #
+        #     dfs_q = [r]
+        #
+        #     while dfs_q:
+        #         c_n = dfs_q.pop()
+        #         for o_n in ug.neighbors(c_n):
+        #             if o_n not in g.tree.nodes:
+        #                 g.tree.add_edge(c_n, o_n)
+        #                 dfs_q.append(o_n)
+        #
+        #     changed = True
+        #     while changed:
+        #         changed = False
+        #         for u in g.tree.nodes:
+        #             T_u = dfs_tree(g.tree, u)
+        #             vertices_in_bags_below_u = set()
+        #             for t in T_u.nodes():
+        #                 vertices_in_bags_below_u.update(g.bags[t])
+        #             missing = (vertices_in_bags_below_u & g._B(u)) - g.bags[u]
+        #             if len(missing) > 0:
+        #                 g.bags[u].update(missing)
+        #                 changed = True
+        #
+        #         changed = changed or g.repair_connectedness()
         return g
 
     def repair_connectedness(self):

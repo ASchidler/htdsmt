@@ -20,10 +20,11 @@ if src_path not in sys.path:
         sys.path.insert(0, os.path.join(src_path, lib))
 
 from htd_validate import Hypergraph
+from htd_validate.decompositions import GeneralizedHypertreeDecomposition
 
 # End of imports
 # Use z3 or mathsat?
-is_z3 = False
+is_z3 = True
 # Filenames and paths to use
 inp_file = '/tmp/slv.encode'
 model_file = '/tmp/slv.model'
@@ -41,7 +42,7 @@ logging.disable(logging.FATAL)
 # Load solver and check permissions
 slv = 'optimathsat' if not is_z3 else 'z3'
 
-for i in xrange(1, 200, 2):
+for i in xrange(1,200, 2):
     sys.stdout.write("Instance {}\n".format(i))
     file = "htd-exact-public/htd-exact_{:03d}.hgr".format(i)
     hypergraph = Hypergraph.from_file(file, fischl_format=False)
@@ -83,57 +84,22 @@ for i in xrange(1, 200, 2):
         solved = (len(errp) == 0)
 
         # Load the resulting model
-        res = enc.decode(outp, is_z3)
+        res = enc.decode(outp, is_z3, htd=htd)
 
         # Display the HTD
         td = res['decomposition']
         num_edges = len(td.T.edges)
 
         valid = td.validate(td.hypergraph)
+        valid_ghtd = GeneralizedHypertreeDecomposition.validate(td, td.hypergraph)
+        valid_sc = td.inverse_edge_function_holds()
 
-        if htd is None and not valid:
-            inpf = open(inp_file, "w+")
-            modelf = open(model_file, "w+")
-            errorf = open(err_file, "w+")
-
-            # Create encoding of the instance
-            enc = frasmt_solver.FraSmtSolver(hypergraph, stream=inpf, checker_epsilon=None)
-            enc.solve(htd=True, limit=res['objective'])
-
-            # Solve using the SMT solver
-            inpf.seek(0)
-            if is_z3:
-                p1 = subprocess.Popen([slv, '-smt2', '-in'], stdin=inpf, stdout=modelf, stderr=errorf)
-            else:
-                p1 = subprocess.Popen(slv, stdin=inpf, stdout=modelf, stderr=errorf, shell=True)
-
-            p1.wait()
-
-            # Retrieve the result
-            modelf.seek(0)
-            errorf.seek(0)
-            outp = modelf.read()
-            errp = errorf.read()
-
-            inpf.close()
-            modelf.close()
-            errorf.close()
-
-            solved = (len(errp) == 0)
-
-            # Load the resulting model
-            res = enc.decode(outp, is_z3)
-
-            # Display the HTD
-            td = res['decomposition']
-            num_edges = len(td.T.edges)
-
-            valid = td.validate(td.hypergraph)
-
-        sys.stdout.write("{}\tResult: {}\tValid: {}\tTime: {}\n".format(
+        sys.stdout.write("{}\tResult: {}\tValid: {}\tSC: {}\tGHTD: {}\tTime: {}\n".format(
             htd,
             res['objective'] if solved else -1,
             valid,
+            valid_sc,
+            valid_ghtd,
             time.time() - before_tm
         ))
 
