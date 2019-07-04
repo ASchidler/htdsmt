@@ -337,6 +337,26 @@ class FraSmtSolver:
                     self.stream.write("(assert (or (not is_desc_{i}_{k}) (not is_desc_{j}_{k}) is_desc_{i}_{j} is_desc_{j}_{i}))\n"
                                       .format(i=i, j=j, k=k))
 
+        # Establish real root
+        vvars = []
+        for i in xrange(1, n + 1):
+            self.stream.write("(declare-const r_{} Bool)\n".format(i))
+            self.stream.write("(declare-const t_{} Bool)\n".format(i))
+            vvars.append("r_{}".format(i))
+
+        self.stream.write("(assert (or {vvars}))\n".format(vvars=" ".join(vvars)))
+        self.stream.write("(assert (=> (and {ordvar} r_{i}) t_{i}))".format(i=i, j=j, ordvar=ordvar))
+        for i in xrange(1, n + 1):
+            for j in xrange(1, n + 1):
+                if i == j:
+                    continue
+
+                ordvar = tord(i, j)
+                self.stream.write("(assert (or (not r_{i}) (not r_{j})))\n".format(i=i, j=j))
+                self.stream.write("(assert (=> (and {ordvar} (not arc_{i}_{j})) t_{i}))".format(i=i, j=j, ordvar=ordvar))
+                self.stream.write("(assert (=> (and {ordvar} r_{i}) (not t_{j})))".format(i=i, j=j, ordvar=ordvar))
+                self.stream.write("(assert (=> (and {ordvar} r_{j}) t_{i}))".format(i=i, j=j, ordvar=ordvar))
+
         # Finally verify the constraint
         for i in xrange(1, n+1):
             for j in xrange(1, n+1):
@@ -344,7 +364,7 @@ class FraSmtSolver:
                     continue
 
                 self.stream.write(
-                    "(assert (or (not is_desc_{i}_{j}) (not covers_{j}_{i})))\n"
+                    "(assert (or (not is_desc_{i}_{j}) (not covers_{j}_{i}) (not t_{j})))\n"
                     .format(i=i, j=j))
 
                 for k in xrange(1, n + 1):
@@ -435,6 +455,13 @@ class FraSmtSolver:
                 if len(desc[n]) != len(actual) or len(desc[n]-actual) > 0:
                     print "Failed on node {}, mismatch".format(n, desc[n] - actual)
 
+        if htd:
+            ts = self._get_t(model)
+            for n in list(htdd.tree.nodes):
+                if not ts[n]:
+                    print n
+                    htdd.tree.remove_node(n)
+
         # except KeyError as ee:
         #     sys.stdout.write("Error parsing output\n")
         #     sys.stdout.write(output)
@@ -515,3 +542,12 @@ class FraSmtSolver:
             desc[i] = val
 
         return desc
+
+    def _get_t(self, model):
+        n = self.hypergraph.number_of_nodes()
+        ret = {}
+
+        for i in xrange(1, n+1):
+            ret[i] = model["t_{}".format(i)]
+
+        return ret
