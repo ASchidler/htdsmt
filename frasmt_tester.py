@@ -42,7 +42,7 @@ logging.disable(logging.FATAL)
 # Load solver and check permissions
 slv = 'optimathsat' if not is_z3 else 'z3'
 
-for i in xrange(5, 200, 2):
+for i in xrange(35, 200, 2):
     sys.stdout.write("Instance {}\n".format(i))
     file = "htd-exact-public/htd-exact_{:03d}.hgr".format(i)
     hypergraph = Hypergraph.from_file(file, fischl_format=False)
@@ -52,55 +52,60 @@ for i in xrange(5, 200, 2):
     src_path = os.path.realpath(os.path.join(src_path, '..'))
 
     for htd in [False, True]:
-        # Create temporary files
-        inpf = open(inp_file, "w+")
-        modelf = open(model_file, "w+")
-        errorf = open(err_file, "w+")
+        # try:
+            # Create temporary files
+            inpf = open(inp_file, "w+")
+            modelf = open(model_file, "w+")
+            errorf = open(err_file, "w+")
 
-        # Create encoding of the instance
-        before_tm = time.time()
-        enc = frasmt_solver.FraSmtSolver(hypergraph, stream=inpf, checker_epsilon=None)
-        enc.solve(htd=htd)
+            # Create encoding of the instance
+            before_tm = time.time()
+            enc = frasmt_solver.FraSmtSolver(hypergraph, stream=inpf, checker_epsilon=None)
+            enc.solve(htd=htd)
 
-        # Solve using the SMT solver
-        inpf.seek(0)
-        if is_z3:
-            p1 = subprocess.Popen([slv, '-smt2', '-in'], stdin=inpf, stdout=modelf, stderr=errorf)
-        else:
-            p1 = subprocess.Popen(slv, stdin=inpf, stdout=modelf, stderr=errorf, shell=True)
+            # Solve using the SMT solver
+            inpf.seek(0)
+            if is_z3:
+                p1 = subprocess.Popen([slv, '-smt2', '-in'], stdin=inpf, stdout=modelf, stderr=errorf)
+            else:
+                p1 = subprocess.Popen(slv, stdin=inpf, stdout=modelf, stderr=errorf, shell=True)
 
-        p1.wait()
+            p1.wait()
 
-        # Retrieve the result
-        modelf.seek(0)
-        errorf.seek(0)
-        outp = modelf.read()
-        errp = errorf.read()
+            # Retrieve the result
+            modelf.seek(0)
+            errorf.seek(0)
+            outp = modelf.read()
+            errp = errorf.read()
 
-        inpf.close()
-        modelf.close()
-        errorf.close()
+            inpf.close()
+            modelf.close()
+            errorf.close()
 
-        solved = (len(errp) == 0)
+            solved = (len(errp) == 0)
 
-        # Load the resulting model
-        res = enc.decode(outp, is_z3, htd=htd)
+            # Load the resulting model
+            res = enc.decode(outp, is_z3, htd=htd)
 
-        # Display the HTD
-        td = res['decomposition']
-        num_edges = len(td.T.edges)
+            # Display the HTD
+            td = res['decomposition']
+            num_edges = len(td.T.edges)
 
-        valid = td.validate(td.hypergraph)
-        valid_ghtd = GeneralizedHypertreeDecomposition.validate(td, td.hypergraph)
-        valid_sc = td.inverse_edge_function_holds()
+            valid = td.validate(td.hypergraph)
+            valid_ghtd = GeneralizedHypertreeDecomposition.validate(td, td.hypergraph)
+            valid_sc = td.inverse_edge_function_holds()
 
-        sys.stdout.write("{}\tResult: {}\tValid: {}\tSC: {}\tGHTD: {}\tTime: {}\n".format(
-            htd,
-            res['objective'] if solved else -1,
-            valid,
-            valid_sc,
-            valid_ghtd,
-            time.time() - before_tm
-        ))
+            sys.stdout.write("{}\tResult: {}\tValid:  {}\tSP: {}\tGHTD: {}\tTime: {}\n".format(
+                htd,
+                res['objective'] if solved else -1,
+                valid,
+                valid_sc,
+                valid_ghtd,
+                time.time() - before_tm
+            ))
+        # except (RuntimeError, KeyError):
+        #     ef = open(model_file, "w+")
+        #     sys.stderr.write("An error occurred:\n{}\n".format(ef.read()))
+        #     ef.close()
 
     sys.stdout.write("\n")

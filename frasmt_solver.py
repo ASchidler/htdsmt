@@ -337,6 +337,32 @@ class FraSmtSolver:
                     self.stream.write("(assert (or (not is_desc_{i}_{k}) (not is_desc_{j}_{k}) is_desc_{i}_{j} is_desc_{j}_{i}))\n"
                                       .format(i=i, j=j, k=k))
 
+        # Add bag finding
+        for i in xrange(1, n + 1):
+            for j in xrange(1, n + 1):
+                self.stream.write("(declare-const is_bag_{}_{} Bool)\n".format(i, j))
+
+        for i in xrange(1, n + 1):
+            self.stream.write("(assert is_bag_{i}_{i})\n".format(i=i))
+
+            for j in xrange(1, n + 1):
+                if i == j:
+                    continue
+
+                ordvar = tord(i, j)
+                self.stream.write("(assert (=> (and arc_{i}_{j} {ordvar}) is_bag_{i}_{j}))\n".format(i=i, j=j, ordvar=ordvar))
+                self.stream.write(
+                    "(assert (=> (not arc_{i}_{j}) (not is_bag_{i}_{j})))\n".format(i=i, j=j, ordvar=ordvar))
+
+                for k in xrange(1, n+1):
+                    if k == i or k == j:
+                        continue
+
+                    ordvar2 = tord(j, k)
+                    for ll in xrange(1, n+1):
+                        self.stream.write(
+                            "(assert (=> (and {ordvar} {ordvar2} is_bag_{i}_{ll} is_bag_{k}_{ll}) is_bag_{j}_{ll}))\n".format(i=i, j=j, k=k, ll=ll, ordvar=ordvar, ordvar2=ordvar2))
+
         # Establish real root
         vvars = []
         for i in xrange(1, n + 1):
@@ -353,9 +379,15 @@ class FraSmtSolver:
 
                 ordvar = tord(i, j)
                 self.stream.write("(assert (or (not r_{i}) (not r_{j})))\n".format(i=i, j=j))
-                self.stream.write("(assert (=> (and {ordvar} (not arc_{i}_{j})) t_{i}))".format(i=i, j=j, ordvar=ordvar))
-                self.stream.write("(assert (=> (and {ordvar} r_{i}) (not t_{j})))".format(i=i, j=j, ordvar=ordvar))
+                self.stream.write(
+                    "(assert (=> (and {ordvar} (not arc_{i}_{j})) t_{i}))".format(i=i, j=j, ordvar=ordvar))
+                self.stream.write(
+                    "(assert (=> (and {ordvar} r_{i}) (not t_{j})))".format(i=i, j=j, ordvar=ordvar))
                 self.stream.write("(assert (=> (and {ordvar} r_{j}) t_{i}))".format(i=i, j=j, ordvar=ordvar))
+
+                for k in xrange(1, n + 1):
+                    self.stream.write(
+                        "(assert (=> (and {ordvar} is_bag_{j}_{k} (not is_bag_{i}_{k})) (not t_{i})))".format(i=i, j=j, ordvar=ordvar, k=k))
 
         # Finally verify the constraint
         for i in xrange(1, n+1):
@@ -363,17 +395,17 @@ class FraSmtSolver:
                 if i == j:
                     continue
 
-                self.stream.write(
-                    "(assert (or (not is_desc_{i}_{j}) (not covers_{j}_{i}) (not t_{j})))\n"
-                    .format(i=i, j=j))
+                # self.stream.write(
+                #     "(assert (or (not is_desc_{i}_{j}) (not covers_{j}_{i}) (not t_{j}) is_bag_{i}_{j}))\n"
+                #     .format(i=i, j=j))
 
                 for k in xrange(1, n + 1):
-                    if k == i or k == j:
-                        continue
+                    # if k == i or k == j:
+                    #     continue
                     ordvar1 = tord(i, k)
                     ordvar2 = tord(j, k)
                     self.stream.write(
-                        "(assert (or (not is_desc_{i}_{j}) (not arc_{i}_{k}) (not covers_{j}_{k}) (not {v1}) (and {v2} arc_{j}_{k})))\n"
+                        "(assert (or (not is_desc_{i}_{j}) (not is_bag_{i}_{k}) (not covers_{j}_{k}) is_bag_{j}_{k}))\n"
                         .format(i=i, j=j, k=k, v1=ordvar1, v2=ordvar2))
 
     def encode(self, clique=None, twins=None, htd=True):
@@ -438,7 +470,7 @@ class FraSmtSolver:
         ordering = self._get_ordering(model)
         weights = self._get_weights(model, ordering)
         edges = self._get_edges(model) if htd else None
-        arcs = self._get_arcs(model) #if htd else None
+        arcs = self._get_arcs(model) if htd else None
         #edges = None
         #arcs = None
         #edges = None
@@ -459,7 +491,7 @@ class FraSmtSolver:
             ts = self._get_t(model)
             for n in list(htdd.tree.nodes):
                 if not ts[n]:
-                    print n
+                    #print n
                     htdd.tree.remove_node(n)
 
         # except KeyError as ee:
@@ -521,10 +553,10 @@ class FraSmtSolver:
 
         for i in xrange(1, n+1):
             ret[i] = {}
-            ret[i][i] = True
+            #ret[i][i] = True
             for j in xrange(1, n+1):
-                if i != j:
-                    ret[i][j] = model["arc_{}_{}".format(i, j)]
+                #if i != j:
+                ret[i][j] = model["is_bag_{}_{}".format(i, j)]
 
         return ret
 

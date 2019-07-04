@@ -42,13 +42,18 @@ class HypertreeDecomposition(GeneralizedHypertreeDecomposition):
 
         g.hypergraph = hypergraph
 
-        # if arcs:
-        #     g.bags = {}
-        #     for i in ordering:
-        #         g.bags[i] = set()
-        #         for j in ordering:
-        #             if arcs[i][j]:
-        #                 g.bags[i].add(j)
+        if arcs:
+            g.bags = {}
+            for i in ordering:
+                g.bags[i] = set()
+                for j in ordering:
+                    if arcs[i][j]:
+                        g.bags[i].add(j)
+
+            if edges:
+                g.tree = DiGraph()
+                for i, j in edges:
+                    g.tree.add_edge(i, j)
         # if edges:
         #     g.construct_tree(edges, pgraph_view, ordering, arcs)
         #
@@ -90,19 +95,20 @@ class HypertreeDecomposition(GeneralizedHypertreeDecomposition):
         #
         #     return g
 
-        print ordering
+        # print ordering
 
-        tst = {}
-        for i in ordering:
-            tst[i] = set()
-            for j in ordering:
-                if arcs[i][j]:
-                    tst[i].add(j)
-        for n in g.tree.nodes:
-            print "{}:\t{}\t{}".format(n, g.bags[n], tst[n])
+        tst = {n: set() for n in g.tree.nodes}
+        if arcs:
+            for i in ordering:
+                for j in ordering:
+                    if arcs[i][j]:
+                        tst[i].add(j)
 
-        for i, j in g.tree.edges:
-            print "{} {}".format(i, j)
+        # for n in g.tree.nodes:
+        #     print "{}:\t{}\t{}".format(n, g.bags[n], tst[n])
+        #
+        # for i, j in g.tree.edges:
+        #     print "{} {}".format(i, j)
 
         # For the HTD the root is important. Try to find a root, that
         # ug = g.tree.to_undirected()
