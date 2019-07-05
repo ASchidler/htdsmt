@@ -434,6 +434,39 @@ class FraSmtSolver:
                         "(assert (or (not is_desc_{i}_{j}) (not is_bag_{i}_{k}) (not covers_{j}_{k}) is_bag_{j}_{k}))\n"
                         .format(i=i, j=j, k=k, v1=ordvar1, v2=ordvar2))
 
+        # Symmetry breaking
+        for i in xrange(1, n+1):
+            for j in xrange(i+1, n+1):
+                for k in xrange(1, n + 1):
+                    if i == k or j == k:
+                        continue
+
+                    self.stream.write("(declare-const block_{}_{}_{} Bool)\n".format(i, j, k))
+
+        for i in xrange(1, n+1):
+            vvars = []
+            for j in xrange(i+1, n+1):
+                for k in xrange(1, n + 1):
+                    if i == k or j == k:
+                        continue
+
+                    self.stream.write(
+                        "(assert (or {ord1} (not {ord2}) (not arc_{k}_{i}) block_{i}_{j}_{k}))\n"
+                            .format(i=i, j=j, k=k, ord1=tord(i,j), ord2=tord(j, k)))
+                    self.stream.write(
+                        "(assert (or (not block_{i}_{j}_{k}) or (not {ord1})))\n"
+                        .format(i=i, j=j, k=k, ord1=tord(i, j), ord2=tord(j, k)))
+                    self.stream.write(
+                        "(assert (or (not block_{i}_{j}_{k}) or {ord2}))\n"
+                            .format(i=i, j=j, k=k, ord1=tord(i, j), ord2=tord(j, k)))
+                    self.stream.write(
+                        "(assert (or (not block_{i}_{j}_{k}) or arc_{k}_{i}))\n"
+                            .format(i=i, j=j, k=k, ord1=tord(i, j), ord2=tord(j, k)))
+
+                    vvars.append("block_{i}_{j}_{k}".format(i=i, j=j, k=k))
+
+                self.stream.write("(assert (or ord_{i}_{j} arc_{j}_{i} {vvars}))\n".format(vvars=" ".join(vvars), i=i, j=j))
+
     def encode(self, clique=None, twins=None, htd=True):
         n = self.hypergraph.number_of_nodes()
 
