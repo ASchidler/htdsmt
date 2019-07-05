@@ -333,9 +333,9 @@ class FraSmtSolver:
                     # Transitivity of real descendency
                     self.stream.write("(assert (or (not is_desc_{i}_{j}) (not is_desc_{j}_{k}) is_desc_{i}_{k}))\n"
                                        .format(i=i, j=j, k=k))
-                    self.stream.write("(assert (or (not is_pred_{i}_{j}) (not is_pred_{k}_{j}) (not is_desc_{i}_{k})))\n"
-                                       .format(i=i, j=j, k=k))
-                    self.stream.write("(assert (or (not is_desc_{i}_{k}) (not is_desc_{j}_{k}) is_desc_{i}_{j} is_desc_{j}_{i}))\n"
+
+                    # If the parent is not a descendant of another node, so isn't the successor
+                    self.stream.write("(assert (or (not is_pred_{i}_{j}) is_desc_{j}_{k} (not is_desc_{i}_{k})))\n"
                                       .format(i=i, j=j, k=k))
 
         # Add equivalence relation
@@ -346,17 +346,18 @@ class FraSmtSolver:
         for i in xrange(1, n + 1):
             for j in xrange(i + 1, n + 1):
 
-                if enforce_lex:
-                    # Enforce lexicographic ordering and arcs within the group
-                    self.stream.write("(assert (or (not eql_{i}_{j}) {ord}))\n"
-                                      .format(i=i, j=j, ord=tord(i, j)))
-                    self.stream.write("(assert (or (not eql_{i}_{j}) arc_{i}_{j}))\n"
-                                      .format(i=i, j=j, ord=tord(i, j)))
-                else:
-                    self.stream.write("(assert (or (not eql_{i}_{j}) (not {ord}) arc_{i}_{j}))\n"
-                                      .format(i=i, j=j, ord=tord(i, j)))
-                    self.stream.write("(assert (or (not eql_{i}_{j}) {ord} arc_{j}_{i}))\n"
-                                      .format(i=i, j=j, ord=tord(i, j)))
+                # This seems to slow down the solving...
+                # if enforce_lex:
+                #     # Enforce lexicographic ordering and arcs within the group
+                #     self.stream.write("(assert (or (not eql_{i}_{j}) {ord}))\n"
+                #                       .format(i=i, j=j, ord=tord(i, j)))
+                #     self.stream.write("(assert (or (not eql_{i}_{j}) arc_{i}_{j}))\n"
+                #                       .format(i=i, j=j, ord=tord(i, j)))
+                # else:
+                self.stream.write("(assert (or (not eql_{i}_{j}) (not {ord}) arc_{i}_{j}))\n"
+                                  .format(i=i, j=j, ord=tord(i, j)))
+                self.stream.write("(assert (or (not eql_{i}_{j}) {ord} arc_{j}_{i}))\n"
+                                  .format(i=i, j=j, ord=tord(i, j)))
 
                 for k in xrange(j + 1, n + 1):
                     # Transitivity of eql
@@ -379,14 +380,11 @@ class FraSmtSolver:
                                       .format(i=i, j=j, k=k, ord=tord(i, k)))
 
                     if k != j and k > i:
-                        # Groups must be continuous in the ordering
+                        # Groups must be continuous in the ordering. Do not enforce this without enforce lex,
+                        # as this may be incompatible with the establishes GHTD
                         if enforce_lex:
                             self.stream.write("(assert (or (not {ord1}) (not {ord2}) (not eql_{i}_{k}) eql_{i}_{j}))\n"
                                               .format(i=i, j=j, k=k, ord1=tord(i, j), ord2=tord(j, k)))
-
-                        # if not enforce_lex:
-                        #     self.stream.write("(assert (or (not {ord1}) (not {ord2}) (not eql_{i}_{k}) eql_{i}_{j}))\n"
-                        #                       .format(i=i, j=j, k=k, ord1=tord(k, j), ord2=tord(j, i)))
 
                 for e in xrange(1, m + 1):
                     self.stream.write("(assert (or (not eql_{i}_{j}) (not (= weight_{i}_e{e} 1)) (= weight_{j}_e{e} 1)))\n"
@@ -411,7 +409,7 @@ class FraSmtSolver:
                 self.stream.write(
                     "(assert (=> (not arc_{i}_{j}) (not is_bag_{i}_{j})))\n".format(i=i, j=j, ordvar=ordvar))
 
-                # Descendants are not allowed, if not in the same group
+                # Lower ordered nodes are not allowed, if not in the same equivalence class
                 if j > i:
                     self.stream.write(
                         "(assert (=> (and (not {ordvar}) (not eql_{i}_{j})) (not is_bag_{i}_{j})))\n".format(i=i, j=j, ordvar=ordvar))
@@ -431,13 +429,7 @@ class FraSmtSolver:
                 if i == j:
                     continue
 
-                # self.stream.write(
-                #     "(assert (or (not is_desc_{i}_{j}) (not covers_{j}_{i}) (not t_{j}) is_bag_{i}_{j}))\n"
-                #     .format(i=i, j=j))
-
                 for k in xrange(1, n + 1):
-                    # if k == i or k == j:
-                    #     continue
                     ordvar1 = tord(i, k)
                     ordvar2 = tord(j, k)
                     self.stream.write(
@@ -482,7 +474,7 @@ class FraSmtSolver:
 
                 self.stream.write("(assert (or ord_{i}_{j} arc_{j}_{i} {vvars}))\n".format(vvars=" ".join(vvars), i=i, j=j))
 
-    def encode(self, clique=None, twins=None, htd=True, arcs=None, order=None, enforce_lex=True):
+    def encode(self, clique=None, twins=None, htd=True, arcs=None, order=None, enforce_lex=True, edges=None, bags=None):
         n = self.hypergraph.number_of_nodes()
 
         self.elimination_ordering(n)
@@ -490,6 +482,7 @@ class FraSmtSolver:
         self.break_clique(clique=clique)
         self.encode_twins(twin_iter=twins, clique=clique)
         self.break_order_symmetry()
+
         if htd:
             self.encode_htd(n, enforce_lex)
 
@@ -500,7 +493,8 @@ class FraSmtSolver:
                         continue
 
                     if arcs[i][j]:
-                        self.stream.write("(assert arc_{i}_{j})\n".format(i=i, j=j))
+                        self.stream.write("(assert (or arc_{i}_{j} arc_{j}_{i}))\n".format(i=i, j=j))
+                        #self.stream.write("(assert arc_{j}_{i})\n".format(i=i, j=j))
 
         if order:
             for i in order:
@@ -510,7 +504,16 @@ class FraSmtSolver:
                     else:
                         self.stream.write("(assert (not ord_{i}_{j}))\n".format(i=i, j=j))
 
-    def solve(self, clique=None, twins=None, optimize=True, htd=True, limit=None, arcs=None, order=None, force_lex=True, fix_val=None):
+        if edges:
+            for i, j in edges:
+                self.stream.write("(assert (or is_pred_{i}_{j} is_pred_{j}_{i}))\n".format(i=i, j=j))
+
+        if bags:
+            for i, b in bags.iteritems():
+                for j in b:
+                    self.stream.write("(assert is_bag_{i}_{j})\n".format(i=i, j=j))
+
+    def solve(self, clique=None, twins=None, optimize=True, htd=True, limit=None, arcs=None, order=None, force_lex=True, fix_val=None, edges=None, bags=None):
         var = self.add_var("m")
         m = self._vartab[var]
         self.stream.write("(declare-const m Int)\n")
@@ -523,7 +526,7 @@ class FraSmtSolver:
 
         self.prepare_vars()
 
-        self.encode(clique=clique, twins=twins, htd=htd, arcs=arcs, order=order, enforce_lex=force_lex)
+        self.encode(clique=clique, twins=twins, htd=htd, arcs=arcs, order=order, enforce_lex=force_lex, edges=edges, bags=bags)
 
         # assert(False)
         self.fractional_counters(m=m)

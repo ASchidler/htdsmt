@@ -7,6 +7,7 @@ import os
 import subprocess
 import logging
 import time
+import threading
 
 src_path = os.path.abspath(os.path.realpath(inspect.getfile(inspect.currentframe())))
 sys.path.insert(0, os.path.realpath(os.path.join(src_path, '..')))
@@ -42,7 +43,10 @@ logging.disable(logging.FATAL)
 # Load solver and check permissions
 slv = 'optimathsat' if not is_z3 else 'z3'
 
-for i in xrange(21, 200, 2):
+for i in xrange(31, 200, 2):
+    if i == 17 or i == 19:
+        continue
+
     sys.stdout.write("Instance {}\n".format(i))
     file = "htd-exact-public/htd-exact_{:03d}.hgr".format(i)
     hypergraph = Hypergraph.from_file(file, fischl_format=False)
@@ -54,6 +58,8 @@ for i in xrange(21, 200, 2):
     arcs = None
     ord = None
     last_val = None
+    edges = None
+    bags = None
 
     for htd in [False, None, True]:
         try:
@@ -67,7 +73,7 @@ for i in xrange(21, 200, 2):
             enc = frasmt_solver.FraSmtSolver(hypergraph, stream=inpf, checker_epsilon=None)
 
             if htd is None:
-                enc.solve(htd=True, arcs=arcs, order=ord, force_lex=False, fix_val=last_val)
+                enc.solve(htd=True, force_lex=False, edges=edges, fix_val=last_val)
             else:
                 enc.solve(htd=htd)
 
@@ -104,6 +110,8 @@ for i in xrange(21, 200, 2):
             arcs = res['arcs']
             ord = res['ord']
             last_val = res['objective']
+            edges = [(i, j) for i, j in td.tree.edges]
+            bags = td.bags
 
             valid = td.validate(td.hypergraph)
             valid_ghtd = GeneralizedHypertreeDecomposition.validate(td, td.hypergraph)
@@ -117,9 +125,13 @@ for i in xrange(21, 200, 2):
                 valid_ghtd,
                 time.time() - before_tm
             ))
+
+            # for i,j in td.bags.iteritems():
+            #     print "{}: {}".format(i, j)
+            # for i, j in td.tree.edges:
+            #     print "{} {}".format(i, j)
+
         except (RuntimeError, KeyError):
-            ef = open(model_file, "w+")
-            sys.stderr.write("An error occurred:\n{}\n".format(ef.read()))
-            ef.close()
+            sys.stderr.write("An error occurred:\n")
 
     sys.stdout.write("\n")
