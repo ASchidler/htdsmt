@@ -50,18 +50,18 @@ class HypertreeDecomposition(GeneralizedHypertreeDecomposition):
                     if arcs[i][j]:
                         g.bags[i].add(j)
 
-            if edges:
-                g.tree = DiGraph()
-                for i, j in edges:
-                    g.tree.add_edge(i, j)
+        if edges:
+            g.tree = DiGraph()
+            for i, j in edges:
+                g.tree.add_edge(i, j)
         # if edges:
         #     g.construct_tree(edges, pgraph_view, ordering, arcs)
         #
         #     return g
 
-        if edges:
-            for i, j in edges:
-                sys.stdout.write("e {} {}\n".format(i, j))
+        # if edges:
+        #     for i, j in edges:
+        #         sys.stdout.write("e {} {}\n".format(i, j))
 
         # if arcs:
         #     g.bags = {}
@@ -103,7 +103,7 @@ class HypertreeDecomposition(GeneralizedHypertreeDecomposition):
                 for j in ordering:
                     if arcs[i][j]:
                         tst[i].add(j)
-
+        #
         # for n in g.tree.nodes:
         #     print "{}:\t{}\t{}".format(n, g.bags[n], tst[n])
         #

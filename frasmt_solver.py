@@ -244,6 +244,7 @@ class FraSmtSolver:
             return 'ord_{}_{}'.format(ix, jx) if ix < jx else '(not ord_{}_{})'.format(jx, ix)
 
         vvars = []
+        m = self.hypergraph.number_of_edges()
 
         # # Whenever a tree node covers an edge, it covers all of the edge's vertices
         for i in xrange(1, n+1):
@@ -337,6 +338,51 @@ class FraSmtSolver:
                     self.stream.write("(assert (or (not is_desc_{i}_{k}) (not is_desc_{j}_{k}) is_desc_{i}_{j} is_desc_{j}_{i}))\n"
                                       .format(i=i, j=j, k=k))
 
+        # Add equivalence relation
+        for i in xrange(1, n+1):
+            for j in xrange(i+1, n+1):
+                self.stream.write("(declare-const eql_{}_{} Bool)\n".format(i, j))
+
+        for i in xrange(1, n + 1):
+            for j in xrange(i + 1, n + 1):
+
+                # Enforce lexicographic ordering
+                self.stream.write("(assert (or (not eql_{i}_{j}) {ord}))\n"
+                                  .format(i=i, j=j, ord=tord(i, j)))
+                self.stream.write("(assert (or (not eql_{i}_{j}) arc_{i}_{j}))\n"
+                                  .format(i=i, j=j, ord=tord(i, j)))
+
+                for k in xrange(j + 1, n + 1):
+                    # Transitivity of eql
+                    self.stream.write("(assert (or (not eql_{i}_{j}) (not eql_{j}_{k}) eql_{i}_{k}))\n"
+                                      .format(i=i, j=j, k=k))
+                    self.stream.write("(assert (or (not eql_{i}_{k}) (not eql_{j}_{k}) eql_{i}_{j}))\n"
+                                      .format(i=i, j=j, k=k))
+                    self.stream.write("(assert (or (not eql_{i}_{j}) (not eql_{i}_{k}) eql_{j}_{k}))\n"
+                                      .format(i=i, j=j, k=k))
+
+                for k in xrange(1, n+1):
+                    if k == i or k == j:
+                        continue
+
+                    # Enforce same arcs
+                    self.stream.write("(assert (or (not eql_{i}_{j}) (not arc_{i}_{k}) (not {ord}) arc_{j}_{k}))\n"
+                                      .format(i=i, j=j, k=k, ord=tord(j, k)))
+                    self.stream.write("(assert (or (not eql_{i}_{j}) (not arc_{j}_{k}) (not {ord}) arc_{i}_{k}))\n"
+                                      .format(i=i, j=j, k=k, ord=tord(i, k)))
+
+                    if k != j and k > i:
+                        # Groups must be continuous in the ordering
+                        self.stream.write("(assert (or (not ord1) (not ord2) (not eql_{i}_{k}) eql_{i}_{j}))\n"
+                                          .format(i=i, j=j, k=k, ord1=tord(i, j), ord2=tord(j, k)))
+
+                for e in xrange(1, m + 1):
+                    self.stream.write("(assert (or (not eql_{i}_{j}) (not (= weight_{i}_e{e} 1)) (= weight_{j}_e{e} 1)))\n"
+                                      .format(i=i, j=j, e=e))
+                    self.stream.write(
+                        "(assert (or (not eql_{i}_{j}) (not (= weight_{j}_e{e} 1)) (= weight_{i}_e{e} 1)))\n"
+                        .format(i=i, j=j, e=e))
+
         # Add bag finding
         for i in xrange(1, n + 1):
             for j in xrange(1, n + 1):
@@ -354,40 +400,20 @@ class FraSmtSolver:
                 self.stream.write(
                     "(assert (=> (not arc_{i}_{j}) (not is_bag_{i}_{j})))\n".format(i=i, j=j, ordvar=ordvar))
 
-                for k in xrange(1, n+1):
-                    if k == i or k == j:
-                        continue
-
-                    ordvar2 = tord(j, k)
-                    for ll in xrange(1, n+1):
-                        self.stream.write(
-                            "(assert (=> (and {ordvar} {ordvar2} is_bag_{i}_{ll} is_bag_{k}_{ll}) is_bag_{j}_{ll}))\n".format(i=i, j=j, k=k, ll=ll, ordvar=ordvar, ordvar2=ordvar2))
-
-        # Establish real root
-        vvars = []
-        for i in xrange(1, n + 1):
-            self.stream.write("(declare-const r_{} Bool)\n".format(i))
-            self.stream.write("(declare-const t_{} Bool)\n".format(i))
-            vvars.append("r_{}".format(i))
-
-        self.stream.write("(assert (or {vvars}))\n".format(vvars=" ".join(vvars)))
-        self.stream.write("(assert (=> (and {ordvar} r_{i}) t_{i}))".format(i=i, j=j, ordvar=ordvar))
-        for i in xrange(1, n + 1):
-            for j in xrange(1, n + 1):
-                if i == j:
-                    continue
-
-                ordvar = tord(i, j)
-                self.stream.write("(assert (or (not r_{i}) (not r_{j})))\n".format(i=i, j=j))
-                self.stream.write(
-                    "(assert (=> (and {ordvar} (not arc_{i}_{j})) t_{i}))".format(i=i, j=j, ordvar=ordvar))
-                self.stream.write(
-                    "(assert (=> (and {ordvar} r_{i}) (not t_{j})))".format(i=i, j=j, ordvar=ordvar))
-                self.stream.write("(assert (=> (and {ordvar} r_{j}) t_{i}))".format(i=i, j=j, ordvar=ordvar))
-
-                for k in xrange(1, n + 1):
+                # Descendants are not allowed, if not in the same group
+                if j > i:
                     self.stream.write(
-                        "(assert (=> (and {ordvar} is_bag_{j}_{k} (not is_bag_{i}_{k})) (not t_{i})))".format(i=i, j=j, ordvar=ordvar, k=k))
+                        "(assert (=> (and (not {ordvar}) (not eql_{i}_{j})) (not is_bag_{i}_{j})))\n".format(i=i, j=j, ordvar=ordvar))
+                    self.stream.write(
+                        "(assert (=> (and {ordvar} (not eql_{i}_{j})) (not is_bag_{j}_{i})))\n".format(i=i, j=j,
+                                                                                                             ordvar=ordvar))
+
+            for j in xrange(i+1, n+1):
+                self.stream.write(
+                    "(assert (=> eql_{i}_{j} is_bag_{i}_{j}))\n".format(i=i, j=j))
+
+                self.stream.write(
+                    "(assert (=> eql_{i}_{j} is_bag_{j}_{i}))\n".format(i=i, j=j))
 
         # Finally verify the constraint
         for i in xrange(1, n+1):
@@ -486,13 +512,20 @@ class FraSmtSolver:
                 actual = set(descendants(htdd.tree, n))
                 if len(desc[n]) != len(actual) or len(desc[n]-actual) > 0:
                     print "Failed on node {}, mismatch".format(n, desc[n] - actual)
+        #
+        # if htd:
+        #     eql = self._get_eq(model)
+        #
+        #     for i, j in eql.iteritems():
+        #         print "{}: {}".format(i, j)
 
-        if htd:
-            ts = self._get_t(model)
-            for n in list(htdd.tree.nodes):
-                if not ts[n]:
-                    #print n
-                    htdd.tree.remove_node(n)
+
+        # if htd:
+        #     ts = self._get_t(model)
+        #     for n in list(htdd.tree.nodes):
+        #         if not ts[n]:
+        #             #print n
+        #             htdd.tree.remove_node(n)
 
         # except KeyError as ee:
         #     sys.stdout.write("Error parsing output\n")
@@ -583,3 +616,14 @@ class FraSmtSolver:
             ret[i] = model["t_{}".format(i)]
 
         return ret
+
+    def _get_eq(self, model):
+        n = self.hypergraph.number_of_nodes()
+        desc = {i: set() for i in xrange(1, n+1)}
+        for i in xrange(1, n+1):
+            for j in xrange(i + 1, n+1):
+                if model["eql_{}_{}".format(i, j)]:
+                    desc[i].add(j)
+                    desc[j].add(i)
+
+        return desc

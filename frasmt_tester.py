@@ -42,7 +42,7 @@ logging.disable(logging.FATAL)
 # Load solver and check permissions
 slv = 'optimathsat' if not is_z3 else 'z3'
 
-for i in xrange(35, 200, 2):
+for i in xrange(21, 200, 2):
     sys.stdout.write("Instance {}\n".format(i))
     file = "htd-exact-public/htd-exact_{:03d}.hgr".format(i)
     hypergraph = Hypergraph.from_file(file, fischl_format=False)
