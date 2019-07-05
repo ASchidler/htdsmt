@@ -51,8 +51,12 @@ for i in xrange(21, 200, 2):
     src_path = os.path.abspath(os.path.realpath(inspect.getfile(inspect.currentframe())))
     src_path = os.path.realpath(os.path.join(src_path, '..'))
 
-    for htd in [False, True]:
-        # try:
+    arcs = None
+    ord = None
+    last_val = None
+
+    for htd in [False, None, True]:
+        try:
             # Create temporary files
             inpf = open(inp_file, "w+")
             modelf = open(model_file, "w+")
@@ -61,7 +65,14 @@ for i in xrange(21, 200, 2):
             # Create encoding of the instance
             before_tm = time.time()
             enc = frasmt_solver.FraSmtSolver(hypergraph, stream=inpf, checker_epsilon=None)
-            enc.solve(htd=htd)
+
+            if htd is None:
+                enc.solve(htd=True, arcs=arcs, order=ord, force_lex=False, fix_val=last_val)
+            else:
+                enc.solve(htd=htd)
+
+            if htd is None:
+                htd = True
 
             # Solve using the SMT solver
             inpf.seek(0)
@@ -90,6 +101,9 @@ for i in xrange(21, 200, 2):
             # Display the HTD
             td = res['decomposition']
             num_edges = len(td.T.edges)
+            arcs = res['arcs']
+            ord = res['ord']
+            last_val = res['objective']
 
             valid = td.validate(td.hypergraph)
             valid_ghtd = GeneralizedHypertreeDecomposition.validate(td, td.hypergraph)
@@ -103,9 +117,9 @@ for i in xrange(21, 200, 2):
                 valid_ghtd,
                 time.time() - before_tm
             ))
-        # except (RuntimeError, KeyError):
-        #     ef = open(model_file, "w+")
-        #     sys.stderr.write("An error occurred:\n{}\n".format(ef.read()))
-        #     ef.close()
+        except (RuntimeError, KeyError):
+            ef = open(model_file, "w+")
+            sys.stderr.write("An error occurred:\n{}\n".format(ef.read()))
+            ef.close()
 
     sys.stdout.write("\n")

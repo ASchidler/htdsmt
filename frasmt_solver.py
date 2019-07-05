@@ -238,7 +238,7 @@ class FraSmtSolver:
                             if i < j:
                                 self.add_clause([self.ord[i][j]])
 
-    def encode_htd(self, n):
+    def encode_htd(self, n, enforce_lex=True):
 
         def tord(ix, jx):
             return 'ord_{}_{}'.format(ix, jx) if ix < jx else '(not ord_{}_{})'.format(jx, ix)
@@ -346,11 +346,17 @@ class FraSmtSolver:
         for i in xrange(1, n + 1):
             for j in xrange(i + 1, n + 1):
 
-                # Enforce lexicographic ordering
-                self.stream.write("(assert (or (not eql_{i}_{j}) {ord}))\n"
-                                  .format(i=i, j=j, ord=tord(i, j)))
-                self.stream.write("(assert (or (not eql_{i}_{j}) arc_{i}_{j}))\n"
-                                  .format(i=i, j=j, ord=tord(i, j)))
+                if enforce_lex:
+                    # Enforce lexicographic ordering and arcs within the group
+                    self.stream.write("(assert (or (not eql_{i}_{j}) {ord}))\n"
+                                      .format(i=i, j=j, ord=tord(i, j)))
+                    self.stream.write("(assert (or (not eql_{i}_{j}) arc_{i}_{j}))\n"
+                                      .format(i=i, j=j, ord=tord(i, j)))
+                else:
+                    self.stream.write("(assert (or (not eql_{i}_{j}) (not {ord}) arc_{i}_{j}))\n"
+                                      .format(i=i, j=j, ord=tord(i, j)))
+                    self.stream.write("(assert (or (not eql_{i}_{j}) {ord} arc_{j}_{i}))\n"
+                                      .format(i=i, j=j, ord=tord(i, j)))
 
                 for k in xrange(j + 1, n + 1):
                     # Transitivity of eql
@@ -368,19 +374,24 @@ class FraSmtSolver:
                     # Enforce same arcs
                     self.stream.write("(assert (or (not eql_{i}_{j}) (not arc_{i}_{k}) (not {ord}) arc_{j}_{k}))\n"
                                       .format(i=i, j=j, k=k, ord=tord(j, k)))
+
                     self.stream.write("(assert (or (not eql_{i}_{j}) (not arc_{j}_{k}) (not {ord}) arc_{i}_{k}))\n"
                                       .format(i=i, j=j, k=k, ord=tord(i, k)))
 
                     if k != j and k > i:
                         # Groups must be continuous in the ordering
-                        self.stream.write("(assert (or (not ord1) (not ord2) (not eql_{i}_{k}) eql_{i}_{j}))\n"
-                                          .format(i=i, j=j, k=k, ord1=tord(i, j), ord2=tord(j, k)))
+                        if enforce_lex:
+                            self.stream.write("(assert (or (not {ord1}) (not {ord2}) (not eql_{i}_{k}) eql_{i}_{j}))\n"
+                                              .format(i=i, j=j, k=k, ord1=tord(i, j), ord2=tord(j, k)))
+
+                        # if not enforce_lex:
+                        #     self.stream.write("(assert (or (not {ord1}) (not {ord2}) (not eql_{i}_{k}) eql_{i}_{j}))\n"
+                        #                       .format(i=i, j=j, k=k, ord1=tord(k, j), ord2=tord(j, i)))
 
                 for e in xrange(1, m + 1):
                     self.stream.write("(assert (or (not eql_{i}_{j}) (not (= weight_{i}_e{e} 1)) (= weight_{j}_e{e} 1)))\n"
                                       .format(i=i, j=j, e=e))
-                    self.stream.write(
-                        "(assert (or (not eql_{i}_{j}) (not (= weight_{j}_e{e} 1)) (= weight_{i}_e{e} 1)))\n"
+                    self.stream.write("(assert (or (not eql_{i}_{j}) (not (= weight_{j}_e{e} 1)) (= weight_{i}_e{e} 1)))\n"
                         .format(i=i, j=j, e=e))
 
         # Add bag finding
@@ -405,8 +416,7 @@ class FraSmtSolver:
                     self.stream.write(
                         "(assert (=> (and (not {ordvar}) (not eql_{i}_{j})) (not is_bag_{i}_{j})))\n".format(i=i, j=j, ordvar=ordvar))
                     self.stream.write(
-                        "(assert (=> (and {ordvar} (not eql_{i}_{j})) (not is_bag_{j}_{i})))\n".format(i=i, j=j,
-                                                                                                             ordvar=ordvar))
+                        "(assert (=> (and {ordvar} (not eql_{i}_{j})) (not is_bag_{j}_{i})))\n".format(i=i, j=j, ordvar=ordvar))
 
             for j in xrange(i+1, n+1):
                 self.stream.write(
@@ -434,7 +444,12 @@ class FraSmtSolver:
                         "(assert (or (not is_desc_{i}_{j}) (not is_bag_{i}_{k}) (not covers_{j}_{k}) is_bag_{j}_{k}))\n"
                         .format(i=i, j=j, k=k, v1=ordvar1, v2=ordvar2))
 
-        # Symmetry breaking
+    def break_order_symmetry(self):
+        n = self.hypergraph.number_of_nodes()
+
+        def tord(ix, jx):
+            return 'ord_{}_{}'.format(ix, jx) if ix < jx else '(not ord_{}_{})'.format(jx, ix)
+
         for i in xrange(1, n+1):
             for j in xrange(i+1, n+1):
                 for k in xrange(1, n + 1):
@@ -454,40 +469,61 @@ class FraSmtSolver:
                         "(assert (or {ord1} (not {ord2}) (not arc_{k}_{i}) block_{i}_{j}_{k}))\n"
                             .format(i=i, j=j, k=k, ord1=tord(i,j), ord2=tord(j, k)))
                     self.stream.write(
-                        "(assert (or (not block_{i}_{j}_{k}) or (not {ord1})))\n"
+                        "(assert (or (not block_{i}_{j}_{k}) (not {ord1})))\n"
                         .format(i=i, j=j, k=k, ord1=tord(i, j), ord2=tord(j, k)))
                     self.stream.write(
-                        "(assert (or (not block_{i}_{j}_{k}) or {ord2}))\n"
+                        "(assert (or (not block_{i}_{j}_{k}) {ord2}))\n"
                             .format(i=i, j=j, k=k, ord1=tord(i, j), ord2=tord(j, k)))
                     self.stream.write(
-                        "(assert (or (not block_{i}_{j}_{k}) or arc_{k}_{i}))\n"
+                        "(assert (or (not block_{i}_{j}_{k}) arc_{k}_{i}))\n"
                             .format(i=i, j=j, k=k, ord1=tord(i, j), ord2=tord(j, k)))
 
                     vvars.append("block_{i}_{j}_{k}".format(i=i, j=j, k=k))
 
                 self.stream.write("(assert (or ord_{i}_{j} arc_{j}_{i} {vvars}))\n".format(vvars=" ".join(vvars), i=i, j=j))
 
-    def encode(self, clique=None, twins=None, htd=True):
+    def encode(self, clique=None, twins=None, htd=True, arcs=None, order=None, enforce_lex=True):
         n = self.hypergraph.number_of_nodes()
 
         self.elimination_ordering(n)
         self.cover(n)
         self.break_clique(clique=clique)
         self.encode_twins(twin_iter=twins, clique=clique)
+        self.break_order_symmetry()
         if htd:
-            self.encode_htd(n)
+            self.encode_htd(n, enforce_lex)
 
-    def solve(self, clique=None, twins=None, optimize=True, htd=True, limit=None):
+        if arcs:
+            for i in xrange(1, n + 1):
+                for j in xrange(1, n + 1):
+                    if i == j:
+                        continue
+
+                    if arcs[i][j]:
+                        self.stream.write("(assert arc_{i}_{j})\n".format(i=i, j=j))
+
+        if order:
+            for i in order:
+                for j in xrange(i+1, n+1):
+                    if order.index(i) < order.index(j):
+                        self.stream.write("(assert ord_{i}_{j})\n".format(i=i, j=j))
+                    else:
+                        self.stream.write("(assert (not ord_{i}_{j}))\n".format(i=i, j=j))
+
+    def solve(self, clique=None, twins=None, optimize=True, htd=True, limit=None, arcs=None, order=None, force_lex=True, fix_val=None):
         var = self.add_var("m")
         m = self._vartab[var]
         self.stream.write("(declare-const m Int)\n")
         self.stream.write("(assert (>= m 1))\n")
-        if limit:
+
+        if fix_val:
+            self.stream.write("(assert (= m {}))\n".format(fix_val))
+        elif limit:
             self.stream.write("(assert (>= m {}))\n".format(limit))
 
         self.prepare_vars()
 
-        self.encode(clique=clique, twins=twins, htd=htd)
+        self.encode(clique=clique, twins=twins, htd=htd, arcs=arcs, order=order, enforce_lex=force_lex)
 
         # assert(False)
         self.fractional_counters(m=m)
@@ -500,7 +536,7 @@ class FraSmtSolver:
         self.stream.write("(check-sat)\n(get-model)\n")
 
     def decode(self, output, is_z3, htd=False):
-        ret = {"objective": "nan", "decomposition": None}
+        ret = {"objective": "nan", "decomposition": None, "arcs": None, "ord": None, "weights": None}
 
         model = {}
 
@@ -528,15 +564,16 @@ class FraSmtSolver:
         #try:
         ordering = self._get_ordering(model)
         weights = self._get_weights(model, ordering)
+        arcs = self._get_arcs(model)
         edges = self._get_edges(model) if htd else None
-        arcs = self._get_arcs(model) if htd else None
+        bags = self._get_bags(model) if htd else None
         #edges = None
         #arcs = None
         #edges = None
 
         htdd = HypertreeDecomposition.from_ordering(hypergraph=self.hypergraph, ordering=ordering,
-                                                              weights=weights,
-                                                              checker_epsilon=self.__checker_epsilon, edges=edges, arcs=arcs)
+                                                    weights=weights,
+                                                    checker_epsilon=self.__checker_epsilon, edges=edges, bags=bags, htd=htd)
 
         # Debug, verify if the descendent relation is correct
         if htd:
@@ -566,7 +603,7 @@ class FraSmtSolver:
         #     sys.stdout.write("\n")
         #     raise ee
 
-        ret.update({"objective": htdd.width(), "decomposition": htdd})
+        ret.update({"objective": htdd.width(), "decomposition": htdd, "arcs": arcs, "ord": ordering, "weights": weights})
         # if not htd.validate(self.hypergraph):
         #     raise RuntimeError("Found a GHTD that is not a HTD")
 
@@ -613,7 +650,7 @@ class FraSmtSolver:
 
         return edges
 
-    def _get_arcs(self, model):
+    def _get_bags(self, model):
         n = self.hypergraph.number_of_nodes()
         ret = {}
 
@@ -623,6 +660,19 @@ class FraSmtSolver:
             for j in xrange(1, n+1):
                 #if i != j:
                 ret[i][j] = model["is_bag_{}_{}".format(i, j)]
+
+        return ret
+
+    def _get_arcs(self, model):
+        n = self.hypergraph.number_of_nodes()
+        ret = {}
+
+        for i in xrange(1, n+1):
+            ret[i] = {}
+            #ret[i][i] = True
+            for j in xrange(1, n+1):
+                if i != j:
+                    ret[i][j] = model["arc_{}_{}".format(i, j)]
 
         return ret
 
@@ -640,15 +690,6 @@ class FraSmtSolver:
             desc[i] = val
 
         return desc
-
-    def _get_t(self, model):
-        n = self.hypergraph.number_of_nodes()
-        ret = {}
-
-        for i in xrange(1, n+1):
-            ret[i] = model["t_{}".format(i)]
-
-        return ret
 
     def _get_eq(self, model):
         n = self.hypergraph.number_of_nodes()
