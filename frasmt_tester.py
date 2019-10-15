@@ -8,6 +8,7 @@ import subprocess
 import logging
 import time
 import threading
+import networkx as nx
 
 src_path = os.path.abspath(os.path.realpath(inspect.getfile(inspect.currentframe())))
 sys.path.insert(0, os.path.realpath(os.path.join(src_path, '..')))
@@ -43,7 +44,7 @@ logging.disable(logging.FATAL)
 # Load solver and check permissions
 slv = 'optimathsat' if not is_z3 else 'z3'
 
-for i in xrange(31, 200, 2):
+for i in xrange(15, 23, 2):
     if i == 17 or i == 19:
         continue
 
@@ -62,7 +63,7 @@ for i in xrange(31, 200, 2):
     bags = None
 
     for htd in [False, None, True]:
-        try:
+        # try:
             # Create temporary files
             inpf = open(inp_file, "w+")
             modelf = open(model_file, "w+")
@@ -126,12 +127,14 @@ for i in xrange(31, 200, 2):
                 time.time() - before_tm
             ))
 
-            # for i,j in td.bags.iteritems():
-            #     print "{}: {}".format(i, j)
+            # for i, j in td.bags.iteritems():
+            #     lst = list(j)
+            #     lst.sort()
+            #     print "{}: {}".format(i, lst)
             # for i, j in td.tree.edges:
             #     print "{} {}".format(i, j)
 
-        except (RuntimeError, KeyError):
-            sys.stderr.write("An error occurred:\n")
+        # except (RuntimeError, KeyError):
+        #     sys.stderr.write("An error occurred:\n")
 
     sys.stdout.write("\n")

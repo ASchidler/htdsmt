@@ -32,11 +32,11 @@ class HypertreeDecomposition(GeneralizedHypertreeDecomposition):
         return len(self.bags)
 
     @classmethod
-    def from_ordering(cls, hypergraph, ordering=None, weights=None, checker_epsilon=None, edges=None, bags=None, htd=False):
+    def from_ordering(cls, hypergraph, ordering=None, weights=None, checker_epsilon=None, edges=None, bags=None, htd=False, repair=False):
 
         pgraph_view = HypergraphPrimalView(hypergraph=hypergraph)
         g = cls._from_ordering(hypergraph=pgraph_view, plot_if_td_invalid=False, ordering=ordering, weights=weights,
-                                  checker_epsilon=checker_epsilon
+                                  checker_epsilon=checker_epsilon,
                                #,edges=edges
                                )
 
@@ -56,7 +56,7 @@ class HypertreeDecomposition(GeneralizedHypertreeDecomposition):
             for i, j in edges:
                 g.tree.add_edge(i, j)
 
-        if htd:
+        if not repair:
             return g
 
         # For the HTD the root is important. Try to find a root

@@ -119,13 +119,16 @@ class FraSmtSolver:
                 self.stream.write("(assert (<= {} {}))\n".format(weights[0], m))
 
     def elimination_ordering(self, n):
-        tord = lambda p, q: 'ord_{p}{q}'.format(p=p, q=q) if p < q \
-            else '(not ord_{q}{p})'.format(p=p, q=q)
+        tord = lambda p, q: 'ord_{p}_{q}'.format(p=p, q=q) if p < q \
+            else '(not ord_{q}_{p})'.format(p=p, q=q)
 
         for i in xrange(1, n + 1):
             for j in xrange(1, n + 1):
                 if i == j:
                     continue
+
+                self.stream.write("(assert (=> {ordvar} (not arc_{j}_{i})))\n".format(i=i, j=j, ordvar=tord(i, j)))
+
                 for l in xrange(1, n + 1):
                     if i == l or j == l:
                         continue
@@ -288,23 +291,26 @@ class FraSmtSolver:
             for j in xrange(1, n + 1):
                 if i == j:
                     continue
-                ordvar = tord(i, j)
                 vvars.append("is_pred_{i}_{j}".format(i=i, j=j))
 
-                # No node shared, or is smaller (in terms of the orderign) -> no predecessor
+        #         # No node shared, or is smaller (in terms of the orderign) -> no predecessor
+                ordvar = tord(i, j)
                 self.stream.write("(assert (=> (not arc_{i}_{j}) (not is_pred_{i}_{j})))\n".format(i=i, j=j))
-                self.stream.write("(assert (=> {ordvar} (not is_pred_{j}_{i})))\n".format(ordvar=ordvar, i=i, j=j))
-
-                # If there is a smaller node with a shared variable in between -> no predecessor
+        #         self.stream.write("(assert (=> {ordvar} (not is_pred_{j}_{i})))\n".format(ordvar=ordvar, i=i, j=j))
+        #
+        #         # If there is a smaller node with a shared variable in between -> no predecessor
                 for k in xrange(1, n+1):
                     if k == i or k == j:
                         continue
 
                     ordvar2 = tord(j, k)
-
-                    self.stream.write("(assert (or (not arc_{i}_{j}) (not {v1}) (not {v2}) (not is_pred_{i}_{k})))\n"
-                                      .format(v2=ordvar2, v1=ordvar, i=i, j=j, k=k,
-                                              ))
+                    #
+                    # self.stream.write("(assert (or (not arc_{i}_{j}) (not {v1}) (not {v2}) (not is_pred_{i}_{k})))\n"
+                    #                   .format(v2=ordvar2, v1=ordvar, i=i, j=j, k=k,
+                    #                           ))
+                    self.stream.write("(assert (or (not arc_{i}_{j}) (not {ord}) (not is_pred_{i}_{k})))\n"
+                                                  .format(ord=tord(j, k), i=i, j=j, k=k,
+                                                          ))
 
             # A node is either the root, or it has a predecessor
             self.stream.write("(assert (or is_root_{i} {vvars}))\n".format(vvars=" ".join(vvars), i=i))
@@ -354,6 +360,7 @@ class FraSmtSolver:
                 #     self.stream.write("(assert (or (not eql_{i}_{j}) arc_{i}_{j}))\n"
                 #                       .format(i=i, j=j, ord=tord(i, j)))
                 # else:
+                # Enforce that nodes are connected within group
                 self.stream.write("(assert (or (not eql_{i}_{j}) (not {ord}) arc_{i}_{j}))\n"
                                   .format(i=i, j=j, ord=tord(i, j)))
                 self.stream.write("(assert (or (not eql_{i}_{j}) {ord} arc_{j}_{i}))\n"
@@ -372,7 +379,7 @@ class FraSmtSolver:
                     if k == i or k == j:
                         continue
 
-                    # Enforce same arcs
+                    # Enforce same outgoing arcs
                     self.stream.write("(assert (or (not eql_{i}_{j}) (not arc_{i}_{k}) (not {ord}) arc_{j}_{k}))\n"
                                       .format(i=i, j=j, k=k, ord=tord(j, k)))
 
@@ -406,11 +413,17 @@ class FraSmtSolver:
 
                 ordvar = tord(i, j)
                 self.stream.write("(assert (=> (and arc_{i}_{j} {ordvar}) is_bag_{i}_{j}))\n".format(i=i, j=j, ordvar=ordvar))
-                self.stream.write(
-                    "(assert (=> (not arc_{i}_{j}) (not is_bag_{i}_{j})))\n".format(i=i, j=j, ordvar=ordvar))
 
-                # Lower ordered nodes are not allowed, if not in the same equivalence class
                 if j > i:
+                    # These four clauses seem redundant but are not
+                    # Bag membership requires an arc
+                    self.stream.write(
+                        "(assert (=> (and (not arc_{i}_{j}) (not eql_{i}_{j})) (not is_bag_{i}_{j})))\n".format(i=i, j=j, ordvar=ordvar))
+                    self.stream.write(
+                        "(assert (=> (and (not arc_{j}_{i}) (not eql_{i}_{j})) (not is_bag_{j}_{i})))\n".format(i=i,
+                                                                                                                j=j,
+                                                                                                                ordvar=ordvar))
+                    # Lower ordered nodes are not allowed, if not in the same equivalence class
                     self.stream.write(
                         "(assert (=> (and (not {ordvar}) (not eql_{i}_{j})) (not is_bag_{i}_{j})))\n".format(i=i, j=j, ordvar=ordvar))
                     self.stream.write(
@@ -457,31 +470,35 @@ class FraSmtSolver:
                     if i == k or j == k:
                         continue
 
+                    # self.stream.write(
+                    #     "(assert (or {ord1} (not {ord2}) (not arc_{k}_{i}) block_{i}_{j}_{k}))\n"
+                    #         .format(i=i, j=j, k=k, ord1=tord(i, j), ord2=tord(j, k)))
+                    # self.stream.write(
+                    #     "(assert (or (not block_{i}_{j}_{k}) (not {ord1})))\n"
+                    #     .format(i=i, j=j, k=k, ord1=tord(i, j), ord2=tord(j, k)))
                     self.stream.write(
-                        "(assert (or {ord1} (not {ord2}) (not arc_{k}_{i}) block_{i}_{j}_{k}))\n"
-                            .format(i=i, j=j, k=k, ord1=tord(i,j), ord2=tord(j, k)))
+                        "(assert (or (not {ord}) (not arc_{k}_{i}) block_{i}_{j}_{k}))\n"
+                            .format(i=i, j=j, k=k, ord=tord(j, k)))
                     self.stream.write(
-                        "(assert (or (not block_{i}_{j}_{k}) (not {ord1})))\n"
-                        .format(i=i, j=j, k=k, ord1=tord(i, j), ord2=tord(j, k)))
-                    self.stream.write(
-                        "(assert (or (not block_{i}_{j}_{k}) {ord2}))\n"
-                            .format(i=i, j=j, k=k, ord1=tord(i, j), ord2=tord(j, k)))
+                        "(assert (or (not block_{i}_{j}_{k}) {ord}))\n"
+                            .format(i=i, j=j, k=k, ord=tord(j, k)))
                     self.stream.write(
                         "(assert (or (not block_{i}_{j}_{k}) arc_{k}_{i}))\n"
-                            .format(i=i, j=j, k=k, ord1=tord(i, j), ord2=tord(j, k)))
+                            .format(i=i, j=j, k=k))
 
                     vvars.append("block_{i}_{j}_{k}".format(i=i, j=j, k=k))
 
                 self.stream.write("(assert (or ord_{i}_{j} arc_{j}_{i} {vvars}))\n".format(vvars=" ".join(vvars), i=i, j=j))
 
-    def encode(self, clique=None, twins=None, htd=True, arcs=None, order=None, enforce_lex=True, edges=None, bags=None):
+    def encode(self, clique=None, twins=None, htd=True, arcs=None, order=None, enforce_lex=True, edges=None, bags=None, sb=True):
         n = self.hypergraph.number_of_nodes()
 
         self.elimination_ordering(n)
         self.cover(n)
         self.break_clique(clique=clique)
         self.encode_twins(twin_iter=twins, clique=clique)
-        self.break_order_symmetry()
+        if sb:
+            self.break_order_symmetry()
 
         if htd:
             self.encode_htd(n, enforce_lex)
@@ -494,7 +511,6 @@ class FraSmtSolver:
 
                     if arcs[i][j]:
                         self.stream.write("(assert (or arc_{i}_{j} arc_{j}_{i}))\n".format(i=i, j=j))
-                        #self.stream.write("(assert arc_{j}_{i})\n".format(i=i, j=j))
 
         if order:
             for i in order:
@@ -513,7 +529,8 @@ class FraSmtSolver:
                 for j in b:
                     self.stream.write("(assert is_bag_{i}_{j})\n".format(i=i, j=j))
 
-    def solve(self, clique=None, twins=None, optimize=True, htd=True, limit=None, arcs=None, order=None, force_lex=True, fix_val=None, edges=None, bags=None):
+    def solve(self, clique=None, twins=None, optimize=True, htd=True, limit=None, arcs=None, order=None, force_lex=True,
+              fix_val=None, edges=None, bags=None, sb=True):
         var = self.add_var("m")
         m = self._vartab[var]
         self.stream.write("(declare-const m Int)\n")
@@ -526,7 +543,7 @@ class FraSmtSolver:
 
         self.prepare_vars()
 
-        self.encode(clique=clique, twins=twins, htd=htd, arcs=arcs, order=order, enforce_lex=force_lex, edges=edges, bags=bags)
+        self.encode(clique=clique, twins=twins, htd=htd, arcs=arcs, order=order, enforce_lex=force_lex, edges=edges, bags=bags, sb=sb)
 
         # assert(False)
         self.fractional_counters(m=m)
@@ -538,7 +555,7 @@ class FraSmtSolver:
             self.stream.write("(minimize m)\n")
         self.stream.write("(check-sat)\n(get-model)\n")
 
-    def decode(self, output, is_z3, htd=False):
+    def decode(self, output, is_z3, htd=False, repair=True):
         ret = {"objective": "nan", "decomposition": None, "arcs": None, "ord": None, "weights": None}
 
         model = {}
@@ -576,7 +593,7 @@ class FraSmtSolver:
 
         htdd = HypertreeDecomposition.from_ordering(hypergraph=self.hypergraph, ordering=ordering,
                                                     weights=weights,
-                                                    checker_epsilon=self.__checker_epsilon, edges=edges, bags=bags, htd=htd)
+                                                    checker_epsilon=self.__checker_epsilon, edges=edges, bags=bags, htd=htd, repair=repair)
 
         # Debug, verify if the descendent relation is correct
         if htd:
