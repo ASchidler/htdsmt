@@ -9,6 +9,9 @@ import logging
 import time
 import threading
 import networkx as nx
+from networkx.algorithms.clique import find_cliques
+from networkx.algorithms.approximation import max_clique
+from itertools import combinations
 
 
 from lib.htd_validate.htd_validate.utils import Hypergraph
@@ -34,13 +37,23 @@ logging.disable(logging.FATAL)
 # Load solver and check permissions
 slv = './optimathsat' if not is_z3 else 'z3'
 
-for i in range(17, 23, 2):
-    if i == 18 or i == 19:
+for i in range(21, 200, 2):
+    if i == 18 or i == 20:
         continue
 
     sys.stdout.write("Instance {}\n".format(i))
     file = "/home/aschidler/Downloads/htd-exact-public/htd-exact_{:03d}.hgr".format(i)
     hypergraph = Hypergraph.from_file(file, fischl_format=False)
+
+    clique = []
+    pv = nx.Graph()
+    for e in hypergraph.edges():
+        # PRIMAL GRAPH CONSTRUCTION
+        for u, v in combinations(hypergraph.get_edge(e), 2):
+            pv.add_edge(u, v)
+
+    #_, clique = max((len(x), x) for x in find_cliques(pv))
+    #clique = max_clique(pv)
 
     # Launch SMT solver
     src_path = os.path.abspath(os.path.realpath(inspect.getfile(inspect.currentframe())))
@@ -63,9 +76,9 @@ for i in range(17, 23, 2):
         enc = frasmt_solver.FraSmtSolver(hypergraph, stream=inpf, checker_epsilon=None)
 
         if htd is None:
-            enc.solve(htd=True, force_lex=False, edges=edges, fix_val=last_val, sb=False)
+            enc.solve(htd=True, force_lex=False, edges=edges, fix_val=last_val, sb=False, clique=clique)
         else:
-            enc.solve(htd=htd, sb=htd)
+            enc.solve(htd=htd, sb=htd, clique=clique)
 
         if htd is None:
             htd = True
@@ -90,6 +103,7 @@ for i in range(17, 23, 2):
         errorf.close()
 
         solved = (len(errp) == 0)
+        sys.stdout.write("Run finished {}\n".format(time.time() - before_tm))
 
         # Load the resulting model
         try:

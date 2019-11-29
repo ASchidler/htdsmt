@@ -6,7 +6,7 @@ from itertools import combinations
 from networkx.algorithms.dag import descendants
 
 from lib.htd_validate.htd_validate.decompositions import HypertreeDecomposition
-
+from lib.htd_validate.htd_validate.utils import HypergraphPrimalView
 
 class FraSmtSolver:
     def __init__(self, hypergraph, stream, wprecision=20, timeout=0, checker_epsilon=None):
@@ -109,6 +109,15 @@ class FraSmtSolver:
         tord = lambda p, q: 'ord_{p}_{q}'.format(p=p, q=q) if p < q \
             else '(not ord_{q}_{p})'.format(p=p, q=q)
 
+        # Some improvements
+        for i in range(1, n + 1):
+            for j in range(i+1, n + 1):
+                # Arcs cannot go in both directions
+                self.add_clause([-self.arc[j][i], -self.arc[i][j]])
+                # Enforce arc direction from smaller to bigger ordered vertex
+                self.add_clause([-self.ord[i][j], -self.arc[j][i]])
+                self.add_clause([self.ord[i][j], -self.arc[i][j]])
+
         for i in range(1, n + 1):
             for j in range(1, n + 1):
                 if i == j:
@@ -144,8 +153,9 @@ class FraSmtSolver:
                         continue
 
                     # AS CLAUSE
-                    self.add_clause([-self.arc[i][j], -self.arc[i][l], -self.ord[j][l], self.arc[j][l]])
-                    self.add_clause([-self.arc[i][j], -self.arc[i][l], self.ord[j][l], self.arc[l][j]])
+                    # These to clauses are entailed by the improvement clauses and the next clause
+                    # self.add_clause([-self.arc[i][j], -self.arc[i][l], -self.ord[j][l], self.arc[j][l]])
+                    # self.add_clause([-self.arc[i][j], -self.arc[i][l], self.ord[j][l], self.arc[l][j]])
                     # redundant
                     self.add_clause([-self.arc[i][j], -self.arc[i][l], self.arc[j][l], self.arc[l][j]])
 
@@ -480,9 +490,9 @@ class FraSmtSolver:
     def encode(self, clique=None, twins=None, htd=True, arcs=None, order=None, enforce_lex=True, edges=None, bags=None, sb=True):
         n = self.hypergraph.number_of_nodes()
 
+        self.break_clique(clique=clique)
         self.elimination_ordering(n)
         self.cover(n)
-        self.break_clique(clique=clique)
         self.encode_twins(twin_iter=twins, clique=clique)
         if sb:
             self.break_order_symmetry()
