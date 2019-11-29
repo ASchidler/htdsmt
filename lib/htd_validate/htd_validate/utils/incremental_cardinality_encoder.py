@@ -20,6 +20,7 @@
 # from __future__ import print_function
 import networkx as nx
 
+
 class IncrementalCardinalityEncoder:
     def __init__(self, formula):
         self._formula = formula

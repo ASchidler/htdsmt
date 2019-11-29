@@ -21,8 +21,8 @@ import gzip
 import logging
 
 from bz2 import BZ2File
-from cStringIO import StringIO
-from itertools import count, izip
+from io import BytesIO as StringIO
+from itertools import count
 
 try:
     import backports.lzma as xz
@@ -37,7 +37,7 @@ import networkx as nx
 
 def complete_graph(vertices):
     g1 = nx.complete_graph(len(vertices))
-    g1 = nx.relabel_nodes(g1, mapping=dict(izip(g1.nodes(), vertices)), copy=True)
+    g1 = nx.relabel_nodes(g1, mapping=dict(zip(g1.nodes(), vertices)), copy=True)
     return g1
 
 
@@ -137,11 +137,11 @@ class Graph(nx.Graph):
                         else:
                             graph.add_edge(int(line[0]), int(line[1]))
                         assert(0 not in graph.nodes())
-                    except ValueError, e:
+                    except ValueError as e:
                         logging.critical('L(%s). Invalid integer. Exiting.' % nr)
                         logging.critical('Error was: %s' % e)
                         exit(3)
-                    except IndexError, e:
+                    except IndexError as e:
                         logging.critical('L(%s). Incomplete edge. Exiting' % nr)
                         logging.critical('Error was: %s' % e)
                         exit(3)
@@ -182,7 +182,7 @@ class Graph(nx.Graph):
         :rtype Graph, dict
         :return: written hypergraph, remapping of vertices from old hypergraph
         """
-        mapping = {org_id: id for id, org_id in izip(count(start=1), self.nodes_iter())}
+        mapping = {org_id: id for id, org_id in zip(count(start=1), self.nodes)}
         graph = nx.relabel_nodes(self, mapping, copy=copy)
         gr_string = 'edge' if dimacs else 'tw'
         s = 'p ' if dimacs else ''

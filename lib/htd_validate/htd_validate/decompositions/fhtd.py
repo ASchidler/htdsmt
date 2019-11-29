@@ -1,9 +1,9 @@
 import logging
-from cStringIO import StringIO
+from io import StringIO
 
 import networkx as nx
-from htd_validate.decompositions import GeneralizedHypertreeDecomposition
-from htd_validate.utils import Hypergraph, HypergraphPrimalView
+from .ghtd import GeneralizedHypertreeDecomposition
+from ..utils import Hypergraph, HypergraphPrimalView
 
 
 class FractionalHypertreeDecomposition(GeneralizedHypertreeDecomposition):

@@ -24,10 +24,10 @@ import logging
 import time
 import gzip
 from bz2 import BZ2File
-from cStringIO import StringIO
-from itertools import imap, izip
+from io import BytesIO as StringIO
 
-from htd_validate.utils import relabelling as relab
+
+from lib.htd_validate.htd_validate.utils import relabelling as relab
 
 try:
     import backports.lzma as xz
@@ -55,7 +55,7 @@ except:
     clingo = None
 
 import threading
-from htd_validate.utils.integer import safe_int
+from lib.htd_validate.htd_validate.utils.integer import safe_int
 
 
 class SymTab:
@@ -137,9 +137,8 @@ class Hypergraph(object):
             if len(v) >= 2:
                 yield v
 
-
     def iter_twin_vertices(self):
-        #problem: we need to compare vertices by vertices
+        # problem: we need to compare vertices by vertices
 
         def ngbsOfWrt(u, v):
             ngbs = []
@@ -248,17 +247,17 @@ class Hypergraph(object):
         solver = z3.Optimize()
         solver.set("timeout", timeout)
         vars = {}
-        #rev = {}
+        # rev = {}
         start = time.clock()
         m = z3.Int(name="cliquesize")
         for v in self.nodes_iter():
             vars[v] = z3.Int(name="node{0}".format(v))
-            #rev[vars[v]] = v
+            # rev[vars[v]] = v
             solver.add(vars[v] <= 1)
             solver.add(vars[v] >= 0)
 
         solver.add(z3.Sum([vars[v] for v in self.nodes_iter()]) >= m)
-        #solver.add(z3.Or([vars[v] == 1 for v in self.nodes_iter()]))
+        # solver.add(z3.Or([vars[v] == 1 for v in self.nodes_iter()]))
         adj = self.adj
         for u in self.nodes_iter():
             for v in self.nodes_iter():
@@ -270,13 +269,13 @@ class Hypergraph(object):
         try:
             r = solver.maximize(m)
             solver.check()
-        except z3.Z3Exception, e:
+        except z3.Z3Exception as e:
             logging.error(e.message)
         if r is None:
             return None
 
         res = solver.lower(r)
-        #assert(str(res) != 'epsilon' and str(res) != 'unsat' and isinstance(res, z3.IntNumRef) and res.as_long() >= 1)
+        # assert(str(res) != 'epsilon' and str(res) != 'unsat' and isinstance(res, z3.IntNumRef) and res.as_long() >= 1)
         if str(res) == 'epsilon' or str(res) == 'unsat':
             logging.error(res)
         elif not isinstance(res, z3.IntNumRef):
@@ -284,12 +283,12 @@ class Hypergraph(object):
         elif res.as_long() < 1:
             logging.error("clique result < 1")
         else:
-            cl = [k for (k, v) in vars.iteritems() if solver.model()[v].as_long() == 1]
+            cl = [k for (k, v) in vars.items() if solver.model()[v].as_long() == 1]
             if len(cl) != res.as_long():
                 logging.error("{0} vs. {1}".format(len(cl), res.as_long()))
-                #assert(len(cl) == res.as_long())
+                # assert(len(cl) == res.as_long())
                 return None
-            #print cl
+            # print cl
             return cl
         return None
 
@@ -312,7 +311,7 @@ class Hypergraph(object):
                 if opt > asetx[0]:
                     asetx[2] = []
                 asetx[0] = opt
-                answer_set = [safe_int(x) for x in str(model).translate(None, "u()").split(" ")]
+                answer_set = [safe_int(x) for x in str(model).translate({None: "u()"}).split(" ")]
                 # might get "fake" duplicates :(, with different model.optimality_proven
                 if answer_set not in asetx[2][-1:]:
                     asetx[2].append(answer_set)
@@ -346,7 +345,7 @@ class Hypergraph(object):
                 if not ground:
                     prog += ":- u(Y1), u(Y2), not a(Y1, Y2), Y1 < Y2.\n"
                     prog += "a(Y1, Y2) :- e(X, Y1), e(X, Y2), Y1 < Y2.\n"
-                    for k, e in self.__edges.iteritems():
+                    for k, e in self.__edges.items():
                         for v in e:
                             prog += "e({0}, {1}).\n".format(k, v)
                 else:
@@ -365,7 +364,7 @@ class Hypergraph(object):
 
         if not ground and len(self.__edges) > 0:
             prog += ":- "
-            for i in xrange(0, prevent_k_hyperedge):
+            for i in range(0, prevent_k_hyperedge):
                 if i > 0:
                     prog += ", Y{0} < Y{1}, ".format(i - 1, i)
                 prog += "e(X, Y{0}), u(Y{0})".format(i)
@@ -395,10 +394,10 @@ class Hypergraph(object):
                         break
 
                     # next position
-                    for i in xrange(prevent_k_hyperedge - 1, -1, -1):
+                    for i in range(prevent_k_hyperedge - 1, -1, -1):
                         if sub[i] < len(e) + (i - prevent_k_hyperedge):
                             sub[i] += 1
-                            for j in xrange(i + 1, prevent_k_hyperedge):
+                            for j in range(i + 1, prevent_k_hyperedge):
                                 sub[j] = sub[i] + (j - i)
                             break
 
@@ -506,7 +505,7 @@ class Hypergraph(object):
             elif (len(contr) + 1 < len(v)) or (len(contr) + 1 == len(v) and erepr not in v):
                 excl = erepr
                 contr.append(erepr)
-                if self.isSubsumed(set(contr), modulo=k):
+                if self.is_subsumed(set(contr), modulo=k):
                     dl = k
                 else:
                     self.__edges[k] = Hypergraph.__edge_type(contr)
@@ -520,7 +519,7 @@ class Hypergraph(object):
 
     def incident_edges(self, v):
         edges = {}
-        for (e, ge) in self.__edges.iteritems():
+        for (e, ge) in self.__edges.items():
             if v in ge:
                 edges[e] = ge
         return edges
@@ -562,7 +561,7 @@ class Hypergraph(object):
         self.__vertices.remove(v)
         # del self.__vertices[v]
         dl = []
-        for k, e in self.__edges.iteritems():
+        for k, e in self.__edges.items():
             if v in self.__edges[k]:
                 # thank you, tuple!
                 # del self.__edges[k][v]
@@ -572,7 +571,7 @@ class Hypergraph(object):
                 # print self.__edges[k]
                 dl.append((k, e))
         for k, e in dl:
-            if len(e) <= 1 or self.isSubsumed(e, modulo=k):
+            if len(e) <= 1 or self.is_subsumed(e, modulo=k):
                 del self.__edges[k]
 
     def number_of_edges(self):
@@ -752,6 +751,8 @@ class Hypergraph(object):
 
     def add_hyperedge(self, X, name=None, edge_id=None):
         # print name
+        # Convert to list, Python 2 to Python 3 migration
+        X = list(X)
         if len(X) <= 1:
             return
         if self.__non_numerical:
@@ -764,15 +765,15 @@ class Hypergraph(object):
             self.__elabel[edge_id] = name
 
         # remove/avoid already subsets of edges
-        if not self.isSubsumed(set(X), checkSubsumes=True):
+        if not self.is_subsumed(set(X), checkSubsumes=True):
             self.__edges[edge_id] = Hypergraph.__edge_type(X)
             self.__vertices.update(X)
         # else:
         #    print("subsumed: ", X)
         return X
 
-    def isSubsumed(self, sx, checkSubsumes=False, modulo=-1):
-        for k, e in self.__edges.iteritems():
+    def is_subsumed(self, sx, checkSubsumes=False, modulo=-1):
+        for k, e in self.__edges.items():
             if k == modulo:
                 continue
             elif sx.issubset(e):
@@ -786,7 +787,7 @@ class Hypergraph(object):
         return False
 
     def edge_iter(self):
-        return self.__edges.iterkeys()
+        return self.__edges.keys()
 
     def __iter__(self):
         return self.edge_iter()
@@ -824,8 +825,8 @@ class Hypergraph(object):
         s = 'p ' if dimacs else ''
         stream.write('p %s %s %s\n' % (gr_string, self.number_of_nodes(), self.number_of_edges()))
         s = 'e ' if dimacs else ''
-        for e_id, nodes in izip(xrange(self.number_of_edges()), self.edges_iter()):
-            nodes = ' '.join(imap(str, nodes))
+        for e_id, nodes in zip(range(self.number_of_edges()), self.edges_iter()):
+            nodes = ' '.join(map(str, nodes))
             stream.write('%s%s %s\n' % (s, e_id + 1, nodes))
         stream.flush()
 

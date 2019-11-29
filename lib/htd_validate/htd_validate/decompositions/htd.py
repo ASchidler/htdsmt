@@ -1,11 +1,11 @@
 import logging
-from cStringIO import StringIO
+from io import StringIO
 
-from htd_validate.decompositions import GeneralizedHypertreeDecomposition
-from htd_validate.utils import Hypergraph, HypergraphPrimalView
+from .ghtd import GeneralizedHypertreeDecomposition
+from ..utils import Hypergraph, HypergraphPrimalView
 from networkx.algorithms.traversal.depth_first_search import dfs_tree
 from networkx import DiGraph
-from networkx.algorithms.dag import ancestors, descendants
+from networkx.algorithms.dag import ancestors
 from networkx.algorithms import shortest_path
 from networkx.algorithms.lowest_common_ancestors import lowest_common_ancestor
 import sys
@@ -83,7 +83,7 @@ class HypertreeDecomposition(GeneralizedHypertreeDecomposition):
             g.tree = DiGraph()
             g.tree.add_node(r)
             bag_copy = {}
-            for k, v in g.bags.iteritems():
+            for k, v in g.bags.items():
                 bag_copy[k] = set(v)
 
             dfs_q = [r]
@@ -117,7 +117,7 @@ class HypertreeDecomposition(GeneralizedHypertreeDecomposition):
         for t in self.tree.nodes():
             t_b = self._B(t)
             if not (self.bags[t] <= t_b):
-                width = sum(self.hyperedge_function[t].itervalues())
+                width = sum(self.hyperedge_function[t].values())
 
                 # Verify that we do not change the result by adding edges
                 if w - width > 0:
@@ -130,7 +130,7 @@ class HypertreeDecomposition(GeneralizedHypertreeDecomposition):
                         # Idea: on a tie, use the edge that would add the least amount of covered vertices?
                         e = None
                         e_val = -1
-                        for cE in (x for x, v in self.hyperedge_function[t].iteritems() if v == 0):
+                        for cE in (x for x, v in self.hyperedge_function[t].items() if v == 0):
                             eVal = len(set(self.hypergraph.get_edge(cE)) & residue)
 
                             if eVal > e_val:
@@ -228,14 +228,20 @@ class HypertreeDecomposition(GeneralizedHypertreeDecomposition):
         while updated:
             updated = False
             for cn in rordering:
-                anc = list(ancestors(self.tree, cn))
-                anc = sorted(anc, cmp=cmp)
+                anc = []
+                pos = 0
+                for i in list(ancestors(self.tree, cn)):
+                    for j in anc:
+                        if cmp(i, j) < 0:
+                            break
+                        pos += 1
+                    anc.insert(pos, i)
 
                 for ca in anc:
                     path = [x for x in shortest_path(self.tree, ca, cn) if x != ca and x != cn]
 
                     # Check HTD condition
-                    diff = set((bags[cn] - bags[ca]) & cvd[ca])
+                    # diff = set((bags[cn] - bags[ca]) & cvd[ca])
                     # if len(diff - bags[ca]) > 0:
                     #     bags[ca].update(diff)
                     #     updated = True
@@ -290,7 +296,7 @@ class HypertreeDecomposition(GeneralizedHypertreeDecomposition):
 
         for i in self.tree.nodes:
             if i not in cvd[i]:
-                print "Failed for an i"
+                print("Failed for an i")
             bags[i].update(x for x in cvd[i] if (x == i or arcs[i][x]))
 
         # Bottom up
@@ -303,9 +309,9 @@ class HypertreeDecomposition(GeneralizedHypertreeDecomposition):
                 return -1
 
         ecover = {x: set() for x in self.hypergraph.edge_ids_iter()}
-        for ce in ecover.iterkeys():
+        for ce in ecover.keys():
             e = self.hypergraph.get_edge(ce)
-            for kk, kv in bags.iteritems():
+            for kk, kv in bags.items():
                 if len(set(e) - kv) == 0:
                     ecover[ce].add(kk)
 
@@ -313,7 +319,7 @@ class HypertreeDecomposition(GeneralizedHypertreeDecomposition):
 
         shares = {x: set() for x in self.tree.nodes}
         for cn in self.tree.nodes:
-            for kk, kv in bags.iteritems():
+            for kk, kv in bags.items():
                 if kk != cn:
                     if len(bags[kk] & kv) > 0:
                         shares[cn].add(kk)
@@ -322,8 +328,14 @@ class HypertreeDecomposition(GeneralizedHypertreeDecomposition):
         while updated:
             updated = False
             for cn in rordering:
-                anc = list(ancestors(self.tree, cn))
-                anc = sorted(anc, cmp=cmp)
+                anc = []
+                pos = 0
+                for i in list(ancestors(self.tree, cn)):
+                    for j in anc:
+                        if cmp(i, j) < 0:
+                            break
+                        pos += 1
+                    anc.insert(pos, i)
 
                 path = []
                 for ca in anc:

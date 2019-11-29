@@ -1,15 +1,16 @@
 import logging
 import sys
-from cStringIO import StringIO
+from io import StringIO
 from collections import defaultdict
 from decimal import Decimal
-from itertools import count, imap, izip
+from itertools import count
 from operator import itemgetter
+from functools import reduce
 
-import htd_validate.utils.relabelling as relab
+from ..utils import relabelling as relab
 import networkx as nx
-from htd_validate.decompositions import Decomposition
-from htd_validate.utils import Hypergraph
+from .decomposition import Decomposition
+from ..utils.hypergraph import Hypergraph
 
 
 class GeneralizedHypertreeDecomposition(Decomposition):
@@ -55,7 +56,7 @@ class GeneralizedHypertreeDecomposition(Decomposition):
         logging.info("TD:, {0}, {1}, {2}".format(self.T.edges(), self.bags, self.hyperedge_function))
         self.graph.fractional_cover(bag, solution=sol, opt=weight)
         # print self.hyperedge_function, node
-        for i, v in sol.iteritems():
+        for i, v in sol.items():
             if node not in self.hyperedge_function:
                 self.hyperedge_function[node] = {}
             self.hyperedge_function[node][i] = v
@@ -67,7 +68,7 @@ class GeneralizedHypertreeDecomposition(Decomposition):
 
     def _relabel(self, substitution_edges):
         self.hyperedge_function = {node: relab.relabel_dict(he, substitution_keys=substitution_edges)
-                                   for node, he in self.hyperedge_function.iteritems()}
+                                   for node, he in self.hyperedge_function.items()}
 
     @classmethod
     def _read_header(cls, line):
@@ -99,7 +100,7 @@ class GeneralizedHypertreeDecomposition(Decomposition):
                     len(decomp.hyperedge_function), header['num_bags']))
             exit(2)
         for b in decomp.bags.iterkeys():
-            for e in xrange(1, header['num_hyperedges'] + 1):
+            for e in range(1, header['num_hyperedges'] + 1):
                 if not decomp.hyperedge_function[b].has_key(e):
                     logging.error(
                         'Missing function mapping for node %s of the tree. Missing for edge %s \n' % (b, e))
@@ -133,8 +134,8 @@ class GeneralizedHypertreeDecomposition(Decomposition):
             logging.info('v = %s' % v)
             # e \in E(H), v \in e: self._edge_ids_where_v_occurs(v)
             # lambda_u_e_v: {lambda_u(e) : e \in E(H), v \in e}
-            lambda_u_e_v = map(lambda e: self.hyperedge_function[t][e] if e in self.hyperedge_function[t] else 0,
-                               self._edge_ids_where_v_occurs(v))
+            lambda_u_e_v = list(map(lambda e: self.hyperedge_function[t][e] if e in self.hyperedge_function[t] else 0,
+                               self._edge_ids_where_v_occurs(v)))
             logging.info('lambda(%s) = %s' % (t, lambda_u_e_v))
             logging.info('sum(%s) = %s' % (t, str(sum(lambda_u_e_v))))
             bag_sum = sum(map(lambda x: Decimal(x), lambda_u_e_v)) + Decimal(self.epsilon)
@@ -175,7 +176,7 @@ class GeneralizedHypertreeDecomposition(Decomposition):
             return False
 
     def write(self, ostream=sys.stdout):
-        tree_mapping = {org_id: id for id, org_id in izip(count(start=1), self.tree.nodes())}
+        tree_mapping = {org_id: id for id, org_id in zip(count(start=1), self.tree.nodes())}
         tree = nx.relabel_nodes(self.tree, tree_mapping, copy=True)
         num_vertices = reduce(lambda x, y: max(x, max(y or [0])), self.bags.itervalues(), 0)
         num_hyperedges = len(self.hypergraph.edges())
@@ -185,7 +186,7 @@ class GeneralizedHypertreeDecomposition(Decomposition):
         relabeled_bags = {tree_mapping[k]: v for k, v in self.bags.iteritems()}
         relabeled_bags = sorted(relabeled_bags.items(), key=itemgetter(0))
         for bag_id, bag in relabeled_bags:
-            ostream.write('b %s %s\n' % (bag_id, ' '.join(imap(str, bag))))
+            ostream.write('b %s %s\n' % (bag_id, ' '.join(list(map(str, bag)))))
         for u, v in tree.edges_iter():
             ostream.write('%s %s\n' % (u, v))
         ostream.flush()
@@ -203,7 +204,7 @@ class GeneralizedHypertreeDecomposition(Decomposition):
     def width(self):
         weight = [0]  # special case for the empty graph
         for t in self.tree.nodes():
-            weight.append(sum(self.hyperedge_function[t].itervalues()))
+            weight.append(sum(self.hyperedge_function[t].values()))
         logging.info("Width is '%s'." % max(weight))
         return max(weight)
 

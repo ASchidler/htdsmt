@@ -1,4 +1,4 @@
-#! /usr/bin/python2
+#! /usr/bin/python3
 from __future__ import absolute_import
 
 import argparse
@@ -9,19 +9,8 @@ import os
 import subprocess
 import logging
 
-src_path = os.path.abspath(os.path.realpath(inspect.getfile(inspect.currentframe())))
-sys.path.insert(0, os.path.realpath(os.path.join(src_path, '..')))
-
-src_path = os.path.realpath(os.path.join(src_path, '../lib'))
-
-libs = ['htd_validate']
-
-if src_path not in sys.path:
-    for lib in libs:
-        sys.path.insert(0, os.path.join(src_path, lib))
-
-from htd_validate import Hypergraph
-from htd_validate.decompositions import GeneralizedHypertreeDecomposition
+from lib.htd_validate.htd_validate.utils import Hypergraph
+from lib.htd_validate.htd_validate.decompositions import GeneralizedHypertreeDecomposition
 
 # End of imports
 logging.disable(logging.FATAL)
@@ -93,7 +82,7 @@ while run:
     if result is not None:
         enc.solve(htd=True, force_lex=False, edges=edges, fix_val=result, bags=bags, order=ordering, arcs=arcs)
     else:
-        enc.solve(htd=htd, force_lex=args.force_lex, sb=False)
+        enc.solve(htd=htd, force_lex=args.force_lex, sb=args.sb)
 
     # Solve using the SMT solver
     inpf.seek(0)
@@ -113,7 +102,15 @@ while run:
     solved = (len(errp) == 0)
 
     # Load the resulting model
-    res = enc.decode(outp, False, htd=htd, repair=args.mode == 1)
+    try:
+        res = enc.decode(outp, False, htd=htd, repair=args.mode == 1)
+    except ValueError:
+        if args.mode == 2:
+            sys.stdout.write("No model. Usually no HTD could be generated from GHTD. Check error log to make sure.")
+        else:
+            sys.stdout.write("No model. Check error log for more information. (May also occur in case SMT solver's output"
+                       "format changed)\n")
+        exit(2)
 
     # Display the HTD
     td = res['decomposition']
@@ -131,11 +128,12 @@ valid = td.validate(td.hypergraph)
 valid_ghtd = GeneralizedHypertreeDecomposition.validate(td, td.hypergraph)
 valid_sc = td.inverse_edge_function_holds()
 
-if args.mode >0 and not valid:
-    raise RuntimeError
 sys.stdout.write("Result: {}\tValid:  {}\tSP: {}\tGHTD: {}\t\n".format(
     res['objective'],
     valid,
     valid_sc,
     valid_ghtd
 ))
+
+if args.mode > 0 and not valid:
+    exit(1)

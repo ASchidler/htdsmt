@@ -1,13 +1,13 @@
 import logging
 import os
 import traceback
-from cStringIO import StringIO
+from io import StringIO
 from collections import defaultdict
 from itertools import chain
 
-import htd_validate.utils.relabelling as relab
+import lib.htd_validate.htd_validate.utils.relabelling as relab
 import networkx as nx
-from htd_validate.utils import HypergraphPrimalView
+from lib.htd_validate.htd_validate.utils import HypergraphPrimalView
 from networkx.drawing.nx_agraph import graphviz_layout
 
 
@@ -261,7 +261,7 @@ class Decomposition(object):
                             if strict and not header_seen:
                                 log_critical('Edge before header.')
                                 exit(2)
-                            u, v = map(int, line)
+                            u, v = list(map(int, line))
                             if u > header['num_bags']:
                                 log_critical("Edge label %s out of bounds (expected max %s bags)." % (u, num_bags))
                                 exit(2)
@@ -318,7 +318,7 @@ class Decomposition(object):
         # TODO: something missing here
         covered_edges = {e: False for e in self.hypergraph.edges_iter()}
         for e in self.hypergraph.edges_iter():
-            if not any(set(e) <= bag for bag in self.bags.itervalues()):
+            if not any(set(e) <= bag for bag in self.bags.values()):
                 logging.error('Edge "%s" is not covered in any bag.' % str(e))
                 return False
         return True
@@ -335,7 +335,7 @@ class Decomposition(object):
 
     def bag_occuences(self):
         vertex2bags = defaultdict(set)
-        for n, bag in self.bags.iteritems():
+        for n, bag in self.bags.items():
             for v in bag:
                 vertex2bags[v].add(n)
         logging.debug('Bag occurences yields: %s' % vertex2bags)
@@ -349,14 +349,12 @@ class Decomposition(object):
             SG = self.tree.subgraph(vertex2bags[v])
             if not nx.is_connected(SG.to_undirected()):
                 logging.error('Subgraph induced by vertex "%s" is not connected' % v)
-                string = StringIO()
-                nx.write_multiline_adjlist(SG, string)
                 logging.error('Involved bags: %s' % vertex2bags[v])
                 logging.error('Nodes of the hypergraph (should be the same): %s' % SG.nodes())
                 logging.error('Begin Adjacency Matrix')
                 # we skip comments from networkx
-                for line in string.getvalue().split('\n')[3:-1]:
-                    logging.error('%s' % line)
+                for line in nx.generate_multiline_adjlist(SG):
+                    logging.error('%s' % line[3:-1])
                 logging.error('End Adjacency Matrix')
                 return False
         return True
@@ -428,7 +426,7 @@ class Decomposition(object):
                 bags = {}
                 logging.info("hyperedge_function %s" % self.hyperedge_function)
 
-                for k, v in self.bags.iteritems():
+                for k, v in self.bags.items():
                     if self.hyperedge_function:
                         w = ','.join(
                             str(l) + '\n' * (n % 4 == 3) for n, l in enumerate(self.hyperedge_function[k].values()))

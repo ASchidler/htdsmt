@@ -20,6 +20,7 @@
 # from __future__ import print_function
 import networkx as nx
 
+
 class Formula:
 
     def __init__(self, stream=None):
