@@ -1,143 +1,68 @@
 from __future__ import absolute_import
 
 import sys
-import inspect
-import frasmt_solver
-import os
-import subprocess
 import logging
 import time
-import threading
-import networkx as nx
-from networkx.algorithms.clique import find_cliques
-from networkx.algorithms.approximation import max_clique
-from itertools import combinations
-
-
-from lib.htd_validate.htd_validate.utils import Hypergraph
+import frasmt_solver as solver
 from lib.htd_validate.htd_validate.decompositions import GeneralizedHypertreeDecomposition
 
 # End of imports
-# Use z3 or mathsat?
-is_z3 = False
-# Filenames and paths to use
-inp_file = '/tmp/slv.encode'
-model_file = '/tmp/slv.model'
-err_file = '/tmp/slv.err'
 
-# Disable logging, otherwise PACE runs fail... Exceptions will still terminate the run
 logging.disable(logging.FATAL)
 
-# Encode solver as string, uncomment before submitting!
-# if is_z3:
-#     solver_decoder.encode_z3()
-# else:
-#     solver_decoder.encode_os()
+# Path and naming scheme for output files
+base_output_path = '/tmp'
+base_output_file = 'slv'
 
-# Load solver and check permissions
-slv = './optimathsat' if not is_z3 else 'z3'
-
-for i in range(131, 200, 2):
+for i in range(1, 200, 2):
     if i == 18 or i == 20:
         continue
 
     sys.stdout.write("Instance {}\n".format(i))
     file = "/home/aschidler/Downloads/htd-exact-public/htd-exact_{:03d}.hgr".format(i)
-    hypergraph = Hypergraph.from_file(file, fischl_format=False)
-
-    clique = []
-    pv = nx.Graph()
-    for e in hypergraph.edges():
-        # PRIMAL GRAPH CONSTRUCTION
-        for u, v in combinations(hypergraph.get_edge(e), 2):
-            pv.add_edge(u, v)
-
-    #_, clique = max((len(x), x) for x in find_cliques(pv))
-    #clique = max_clique(pv)
-
-    # Launch SMT solver
-    src_path = os.path.abspath(os.path.realpath(inspect.getfile(inspect.currentframe())))
-    src_path = os.path.realpath(os.path.join(src_path, '..'))
 
     arcs = None
     ord = None
     last_val = None
     edges = None
     bags = None
+    res = None
 
     for htd in [False, None, True]:
-        # Create temporary files
-        inpf = open(inp_file, "w+")
-        modelf = open(model_file, "w+")
-        errorf = open(err_file, "w+")
-
         # Create encoding of the instance
         before_tm = time.time()
-        enc = frasmt_solver.FraSmtSolver(hypergraph, stream=inpf, checker_epsilon=None)
 
-        if htd is None:
-            #enc.solve(htd=True, force_lex=False, edges=edges, fix_val=last_val, sb=False, clique=clique)
-            enc.solve(htd=True, force_lex=False, arcs=arcs, fix_val=last_val, sb=False, clique=clique)
+        if htd is None and res is not None:
+            res = solver.solve(base_output_path, base_output_file, file, htd=True, arcs=arcs, sb=False,
+                               fix_val=last_val, timeout=900)
         else:
-            enc.solve(htd=htd, sb=htd, clique=clique)
+            res = solver.solve(base_output_path, base_output_file, file, htd=htd, sb=htd, timeout=900)
+            if htd is None:
+                htd = True
 
-        if htd is None:
-            htd = True
-
-        # Solve using the SMT solver
-        inpf.seek(0)
-        if is_z3:
-            p1 = subprocess.Popen([slv, '-smt2', '-in'], stdin=inpf, stdout=modelf, stderr=errorf)
+        if res is None:
+            sys.stdout.write("Failed!\tTime:{}\n".format(time.time() - before_tm))
         else:
-            p1 = subprocess.Popen(slv, stdin=inpf, stdout=modelf, stderr=errorf, shell=True)
+            # Display the HTD
+            td = res['decomposition']
+            num_edges = len(td.T.edges)
+            arcs = res['arcs']
+            ord = res['ord']
+            last_val = res['objective']
+            edges = [(i, j) for i, j in td.tree.edges]
+            bags = td.bags
 
-        p1.wait()
+            valid = td.validate(td.hypergraph)
+            valid_ghtd = GeneralizedHypertreeDecomposition.validate(td, td.hypergraph)
+            valid_sc = td.inverse_edge_function_holds()
 
-        # Retrieve the result
-        modelf.seek(0)
-        errorf.seek(0)
-        outp = modelf.read()
-        errp = errorf.read()
-
-        inpf.close()
-        modelf.close()
-        errorf.close()
-
-        solved = (len(errp) == 0)
-        sys.stdout.write("Run finished {}\n".format(time.time() - before_tm))
-
-        # Load the resulting model
-        try:
-            res = enc.decode(outp, is_z3, htd=htd, repair=(htd is False))
-        except ValueError as ee:
-            # If htd is none, this simply means, that the result is unsat, i.e. cannot be repaired
-            sys.stdout.write("{}\tResult: Failed\t Time:{}\n".format(
+            sys.stdout.write("{}\tResult: {}\tValid:  {}\tSP: {}\tGHTD: {}\tTime: {}\n".format(
                 htd,
+                res['objective'],
+                valid,
+                valid_sc,
+                valid_ghtd,
                 time.time() - before_tm
             ))
-            raise ee
-            continue
-
-        # Display the HTD
-        td = res['decomposition']
-        num_edges = len(td.T.edges)
-        arcs = res['arcs']
-        ord = res['ord']
-        last_val = res['objective']
-        edges = [(i, j) for i, j in td.tree.edges]
-        bags = td.bags
-
-        valid = td.validate(td.hypergraph)
-        valid_ghtd = GeneralizedHypertreeDecomposition.validate(td, td.hypergraph)
-        valid_sc = td.inverse_edge_function_holds()
-
-        sys.stdout.write("{}\tResult: {}\tValid:  {}\tSP: {}\tGHTD: {}\tTime: {}\n".format(
-            htd,
-            res['objective'] if solved else -1,
-            valid,
-            valid_sc,
-            valid_ghtd,
-            time.time() - before_tm
-        ))
 
     sys.stdout.write("\n")

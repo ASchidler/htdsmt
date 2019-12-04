@@ -3,18 +3,13 @@ from __future__ import absolute_import
 
 import argparse
 import sys
-import inspect
-import frasmt_solver
-import os
-import subprocess
 import logging
-
-from lib.htd_validate.htd_validate.utils import Hypergraph
+import frasmt_solver as solver
 from lib.htd_validate.htd_validate.decompositions import GeneralizedHypertreeDecomposition
 
 # End of imports
-logging.disable(logging.FATAL)
 
+logging.disable(logging.FATAL)
 
 parser = argparse.ArgumentParser(description='Calculate the hypertree decomposition for a given hypergraph')
 
@@ -45,84 +40,40 @@ parser.add_argument('-o', dest='use_ordering', action='store_true', default=Fals
 parser.add_argument('-b', dest='use_bags', action='store_true', default=False,
                     help='During SMT-Repair initialize HTD calculation with bags.')
 parser.add_argument('-d', dest='tmp_dir', default='/tmp', help='Path for temporary files, defaults to /tmp')
+parser.add_argument('-v', dest='verbose', default=True, help='Output decomposition')
 
 args = parser.parse_args()
 tmp_dir = args.tmp_dir.strip()
 
-# Filenames
-inp_file = tmp_dir + '/slv.encode'
-model_file = tmp_dir + '/slv.model'
-err_file = tmp_dir + '/slv.err'
+htd = args.mode == 3
+# Use cliques only for GHTD. For HTD they even slow the heuristic methods down
+clique_mode = 1 if args.mode == 0 else 0
+# Use heuristic repair only for mode 1
+repair = args.mode == 1
 
-hypergraph = Hypergraph.from_file(args.graph, fischl_format=False)
-src_path = os.path.abspath(os.path.realpath(inspect.getfile(inspect.currentframe())))
-src_path = os.path.realpath(os.path.join(src_path, '..'))
+# Compute solution
+res = solver.solve(tmp_dir, "slv_runner", args.graph, htd=htd, force_lex=args.force_lex, sb=args.sb)
 
-arcs = None
-ordering = None
-bags = None
-result = None
-edges = None
-run = True
-td = None
-res = None
-
-while run:
-    run = False
-
-    inpf = open(inp_file, "w+")
-    modelf = open(model_file, "w+")
-    errorf = open(err_file, "w+")
-
-    # Create encoding of the instance
-    enc = frasmt_solver.FraSmtSolver(hypergraph, stream=inpf, checker_epsilon=None)
-
-    htd = args.mode == 3 or result is not None
-
-    if result is not None:
-        enc.solve(htd=True, force_lex=False, edges=edges, fix_val=result, bags=bags, order=ordering, arcs=arcs)
-    else:
-        enc.solve(htd=htd, force_lex=args.force_lex, sb=args.sb)
-
-    # Solve using the SMT solver
-    inpf.seek(0)
-    p1 = subprocess.Popen(os.path.join(os.path.dirname(os.path.realpath(__file__)), 'optimathsat'), stdin=inpf, stdout=modelf, stderr=errorf, shell=True)
-    p1.wait()
-
-    # Retrieve the result
-    modelf.seek(0)
-    errorf.seek(0)
-    outp = modelf.read()
-    errp = errorf.read()
-
-    inpf.close()
-    modelf.close()
-    errorf.close()
-
-    solved = (len(errp) == 0)
-
-    # Load the resulting model
-    try:
-        res = enc.decode(outp, False, htd=htd, repair=args.mode == 1)
-    except ValueError:
-        if args.mode == 2:
-            sys.stdout.write("No model. Usually no HTD could be generated from GHTD. Check error log to make sure.")
-        else:
-            sys.stdout.write("No model. Check error log for more information. (May also occur in case SMT solver's output"
-                       "format changed)\n")
-        exit(2)
-
-    # Display the HTD
+# Use stratified encoding
+if args.mode == 2 and res is not None:
     td = res['decomposition']
+    arcs = res['arcs'] if args.use_arcs else None
+    ordering = res['ord'] if args.use_ordering else None
+    result = res['objective']
+    edges = [(i, j) for i, j in td.tree.edges] if args.use_tree else None
+    bags = td.bags if args.use_bags else None
 
-    # Run SMT-Repair
-    if args.mode == 2 and result is None:
-        run = True
-        arcs = res['arcs'] if args.use_arcs else None
-        ordering = res['ord'] if args.use_ordering else None
-        result = res['objective']
-        edges = [(i, j) for i, j in td.tree.edges] if args.use_tree else None
-        bags = td.bags if args.use_bags else None
+    # Compute stratified solution
+    res = solver.solve(tmp_dir, "slv", args.graph, htd=True, force_lex=False, edges=edges, fix_val=result,
+                       bags=bags, order=ordering, arcs=arcs, heuristic_repair=False)
+
+# Display result if available
+if res is None:
+    print("No model. For heuristic methods this can signal a failure. In case of a timeout used, this can mean "
+          "the timout has been reached. See output model and error file for potential error messages.")
+
+# Display the HTD
+td = res['decomposition']
 
 valid = td.validate(td.hypergraph)
 valid_ghtd = GeneralizedHypertreeDecomposition.validate(td, td.hypergraph)
@@ -137,3 +88,22 @@ sys.stdout.write("Result: {}\tValid:  {}\tSP: {}\tGHTD: {}\t\n".format(
 
 if args.mode > 0 and not valid:
     exit(1)
+
+if args.verbose:
+    mode = "ghtd" if args.mode == 0 else "htd"
+    print(f"s {mode} {len(td.bags)} {res['objective']} {len(td.hypergraph.nodes())} {len(td.hypergraph.edges())}")
+
+    # Output bags
+    for k, v in td.bags.items():
+        print("b {} {}".format(k, " ".join((str(x) for x in v))))
+    print("")
+
+    # Output edges
+    for u, v in td.tree.edges:
+        print(f"{u} {v}")
+    print("")
+
+    # Output edge function
+    for k, v in td.hyperedge_function.items():
+        for k2, v2 in v.items():
+            print(f"w {k} {k2} {v2}")
