@@ -50,6 +50,13 @@ class HypertreeDecomposition(GeneralizedHypertreeDecomposition):
                     if bags[i][j]:
                         g.bags[i].add(j)
 
+            ps = {x: ordering.index(x) for x in ordering}
+            g.tree = DiGraph()
+            for n in ordering:
+                if n != ordering[len(ordering) - 1]:
+                    _, nxt = min((ps[x], x) for x in g.bags[n] if ps[x] > ps[n])
+                    g.tree.add_edge(nxt, n)
+
         if edges:
             g.tree = DiGraph()
 

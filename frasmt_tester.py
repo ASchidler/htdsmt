@@ -37,7 +37,7 @@ logging.disable(logging.FATAL)
 # Load solver and check permissions
 slv = './optimathsat' if not is_z3 else 'z3'
 
-for i in range(21, 200, 2):
+for i in range(131, 200, 2):
     if i == 18 or i == 20:
         continue
 
@@ -76,7 +76,8 @@ for i in range(21, 200, 2):
         enc = frasmt_solver.FraSmtSolver(hypergraph, stream=inpf, checker_epsilon=None)
 
         if htd is None:
-            enc.solve(htd=True, force_lex=False, edges=edges, fix_val=last_val, sb=False, clique=clique)
+            #enc.solve(htd=True, force_lex=False, edges=edges, fix_val=last_val, sb=False, clique=clique)
+            enc.solve(htd=True, force_lex=False, arcs=arcs, fix_val=last_val, sb=False, clique=clique)
         else:
             enc.solve(htd=htd, sb=htd, clique=clique)
 
@@ -114,6 +115,7 @@ for i in range(21, 200, 2):
                 htd,
                 time.time() - before_tm
             ))
+            raise ee
             continue
 
         # Display the HTD

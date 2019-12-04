@@ -8,6 +8,7 @@ from networkx.algorithms.dag import descendants
 from lib.htd_validate.htd_validate.decompositions import HypertreeDecomposition
 from lib.htd_validate.htd_validate.utils import HypergraphPrimalView
 
+
 class FraSmtSolver:
     def __init__(self, hypergraph, stream, wprecision=20, timeout=0, checker_epsilon=None):
         self.__checker_epsilon = checker_epsilon
@@ -408,23 +409,22 @@ class FraSmtSolver:
                 if i == j:
                     continue
 
-                ordvar = tord(i, j)
-                self.stream.write("(assert (=> (and arc_{i}_{j} {ordvar}) is_bag_{i}_{j}))\n".format(i=i, j=j, ordvar=ordvar))
+                self.stream.write("(assert (=> arc_{i}_{j} is_bag_{i}_{j}))\n".format(i=i, j=j))
 
                 if j > i:
                     # These four clauses seem redundant but are not
                     # Bag membership requires an arc
                     self.stream.write(
-                        "(assert (=> (and (not arc_{i}_{j}) (not eql_{i}_{j})) (not is_bag_{i}_{j})))\n".format(i=i, j=j, ordvar=ordvar))
+                        "(assert (=> (and (not arc_{i}_{j}) (not eql_{i}_{j})) (not is_bag_{i}_{j})))\n".format(i=i, j=j))
                     self.stream.write(
                         "(assert (=> (and (not arc_{j}_{i}) (not eql_{i}_{j})) (not is_bag_{j}_{i})))\n".format(i=i,
-                                                                                                                j=j,
-                                                                                                                ordvar=ordvar))
-                    # Lower ordered nodes are not allowed, if not in the same equivalence class
-                    self.stream.write(
-                        "(assert (=> (and (not {ordvar}) (not eql_{i}_{j})) (not is_bag_{i}_{j})))\n".format(i=i, j=j, ordvar=ordvar))
-                    self.stream.write(
-                        "(assert (=> (and {ordvar} (not eql_{i}_{j})) (not is_bag_{j}_{i})))\n".format(i=i, j=j, ordvar=ordvar))
+                                                                                                                j=j
+                                                                                                                ))
+                    # # Lower ordered nodes are not allowed, if not in the same equivalence class
+                    # self.stream.write(
+                    #     "(assert (=> (and (not ord_{i}_{j}) (not eql_{i}_{j})) (not is_bag_{i}_{j})))\n".format(i=i, j=j))
+                    # self.stream.write(
+                    #     "(assert (=> (and ord_{i}_{j} (not eql_{i}_{j})) (not is_bag_{j}_{i})))\n".format(i=i, j=j))
 
             for j in range(i+1, n+1):
                 self.stream.write(
@@ -479,6 +479,7 @@ class FraSmtSolver:
                     self.stream.write(
                         "(assert (or (not block_{i}_{j}_{k}) {ord}))\n"
                             .format(i=i, j=j, k=k, ord=tord(j, k)))
+
                     self.stream.write(
                         "(assert (or (not block_{i}_{j}_{k}) arc_{k}_{i}))\n"
                             .format(i=i, j=j, k=k))
@@ -498,7 +499,7 @@ class FraSmtSolver:
             self.break_order_symmetry()
 
         if htd:
-            self.encode_htd(n, enforce_lex)
+            self.encode_htd2(n, enforce_lex)
 
         if arcs:
             for i in range(1, n + 1):
@@ -582,7 +583,8 @@ class FraSmtSolver:
             ordering = self._get_ordering(model)
             weights = self._get_weights(model, ordering)
             arcs = self._get_arcs(model)
-            edges = self._get_edges(model) if htd else None
+            #edges = self._get_edges(model) if htd else None
+            edges = None
             bags = self._get_bags(model) if htd else None
             #edges = None
             #arcs = None
@@ -593,12 +595,12 @@ class FraSmtSolver:
                                                         checker_epsilon=self.__checker_epsilon, edges=edges, bags=bags, htd=htd, repair=repair)
 
             # Debug, verify if the descendent relation is correct
-            if htd:
-                desc = self._get_desc(model)
-                for n in htdd.tree.nodes:
-                    actual = set(descendants(htdd.tree, n))
-                    if len(desc[n]) != len(actual) or len(desc[n]-actual) > 0:
-                        print("Failed on node {}, mismatch".format(n, desc[n] - actual))
+            # if htd:
+            #     desc = self._get_desc(model)
+            #     for n in htdd.tree.nodes:
+            #         actual = set(descendants(htdd.tree, n))
+            #         if len(desc[n]) != len(actual) or len(desc[n]-actual) > 0:
+            #             print("Failed on node {}, mismatch".format(n, desc[n] - actual))
         #
         # if htd:
         #     eql = self._get_eq(model)
@@ -719,3 +721,149 @@ class FraSmtSolver:
                     desc[j].add(i)
 
         return desc
+
+    def encode_htd2(self, n, enforce_lex=True):
+
+        def tord(ix, jx):
+            return 'ord_{}_{}'.format(ix, jx) if ix < jx else '(not ord_{}_{})'.format(jx, ix)
+
+        vvars = []
+        m = self.hypergraph.number_of_edges()
+
+        # # Whenever a tree node covers an edge, it covers all of the edge's vertices
+        for i in range(1, n+1):
+            for j in range(1, n + 1):
+                self.stream.write("(declare-const covers_{}_{} Bool)\n".format(i, j))
+
+        for i in range(1, n + 1):
+            for j in range(1, n + 1):
+                vvars = []
+                for e in self.hypergraph.incident_edges(j):
+                    vvars.append("(> weight_{i}_e{e} 0)".format(i=i, e=e))
+                    self.stream.write("(assert (=> (= weight_{i}_e{e} 1) covers_{i}_{j}))\n".format(i=i, j=j, e=e))
+                self.stream.write("(assert (or (not covers_{i}_{j}) {vvars}))\n".format(vvars=" ".join(vvars), i=i, j=j))
+
+        # Add equivalence relation
+        for i in range(1, n+1):
+            for j in range(i+1, n+1):
+                self.stream.write("(declare-const eql_{}_{} Bool)\n".format(i, j))
+
+        for i in range(1, n + 1):
+            for j in range(i + 1, n + 1):
+
+                # This seems to slow down the solving...
+                # if enforce_lex:
+                #     # Enforce lexicographic ordering and arcs within the group
+                #     self.stream.write("(assert (or (not eql_{i}_{j}) {ord}))\n"
+                #                       .format(i=i, j=j, ord=tord(i, j)))
+                #     self.stream.write("(assert (or (not eql_{i}_{j}) arc_{i}_{j}))\n"
+                #                       .format(i=i, j=j, ord=tord(i, j)))
+                # else:
+                # Enforce that nodes are connected within group
+                self.stream.write("(assert (or (not eql_{i}_{j}) (not {ord}) arc_{i}_{j}))\n"
+                                  .format(i=i, j=j, ord=tord(i, j)))
+                self.stream.write("(assert (or (not eql_{i}_{j}) {ord} arc_{j}_{i}))\n"
+                                  .format(i=i, j=j, ord=tord(i, j)))
+
+                for k in range(j + 1, n + 1):
+                    # Transitivity of eql
+                    self.stream.write("(assert (or (not eql_{i}_{j}) (not eql_{j}_{k}) eql_{i}_{k}))\n"
+                                      .format(i=i, j=j, k=k))
+                    self.stream.write("(assert (or (not eql_{i}_{k}) (not eql_{j}_{k}) eql_{i}_{j}))\n"
+                                      .format(i=i, j=j, k=k))
+                    self.stream.write("(assert (or (not eql_{i}_{j}) (not eql_{i}_{k}) eql_{j}_{k}))\n"
+                                      .format(i=i, j=j, k=k))
+
+                for k in range(1, n+1):
+                    if k == i or k == j:
+                        continue
+
+                    # Enforce same outgoing arcs
+                    self.stream.write("(assert (or (not eql_{i}_{j}) (not arc_{i}_{k}) (not {ord}) arc_{j}_{k}))\n"
+                                      .format(i=i, j=j, k=k, ord=tord(j, k)))
+
+                    self.stream.write("(assert (or (not eql_{i}_{j}) (not arc_{j}_{k}) (not {ord}) arc_{i}_{k}))\n"
+                                      .format(i=i, j=j, k=k, ord=tord(i, k)))
+
+                    if k != j and k > i:
+                        # Groups must be continuous in the ordering. Do not enforce this without enforce lex,
+                        # as this may be incompatible with the established GHTD
+                        if enforce_lex:
+                            self.stream.write("(assert (or (not {ord1}) (not {ord2}) (not eql_{i}_{k}) eql_{i}_{j}))\n"
+                                              .format(i=i, j=j, k=k, ord1=tord(i, j), ord2=tord(j, k)))
+                            self.stream.write("(assert (or (not {ord1}) (not {ord2}) (not eql_{j}_{k}) eql_{i}_{j}))\n"
+                                              .format(i=i, j=j, k=k, ord1=tord(j, i), ord2=tord(j, k)))
+
+                for e in range(1, m + 1):
+                    self.stream.write("(assert (or (not eql_{i}_{j}) (not (= weight_{i}_e{e} 1)) (= weight_{j}_e{e} 1)))\n"
+                                      .format(i=i, j=j, e=e))
+                    self.stream.write("(assert (or (not eql_{i}_{j}) (not (= weight_{j}_e{e} 1)) (= weight_{i}_e{e} 1)))\n"
+                        .format(i=i, j=j, e=e))
+
+        # Add bag finding
+        for i in range(1, n + 1):
+            for j in range(1, n + 1):
+                self.stream.write("(declare-const is_bag_{}_{} Bool)\n".format(i, j))
+
+        for i in range(1, n + 1):
+            self.stream.write("(assert is_bag_{i}_{i})\n".format(i=i))
+
+            for j in range(1, n + 1):
+                if i == j:
+                    continue
+
+                self.stream.write("(assert (=> arc_{i}_{j} is_bag_{i}_{j}))\n".format(i=i, j=j))
+
+                if j > i:
+                    # These four clauses seem redundant but are not
+                    # Bag membership requires an arc
+                    self.stream.write(
+                        "(assert (=> (and (not arc_{i}_{j}) (not eql_{i}_{j})) (not is_bag_{i}_{j})))\n".format(i=i, j=j))
+                    self.stream.write(
+                        "(assert (=> (and (not arc_{j}_{i}) (not eql_{i}_{j})) (not is_bag_{j}_{i})))\n".format(i=i,
+                                                                                                                j=j
+                                                                                                                ))
+
+                    # # Lower ordered nodes are not allowed, if not in the same equivalence class
+                    # self.stream.write(
+                    #     "(assert (=> (and (not ord_{i}_{j}) (not eql_{i}_{j})) (not is_bag_{i}_{j})))\n".format(i=i, j=j))
+                    # self.stream.write(
+                    #     "(assert (=> (and ord_{i}_{j} (not eql_{i}_{j})) (not is_bag_{j}_{i})))\n".format(i=i, j=j))
+
+            for j in range(i+1, n+1):
+                self.stream.write(
+                    "(assert (=> eql_{i}_{j} is_bag_{i}_{j}))\n".format(i=i, j=j))
+
+                self.stream.write(
+                    "(assert (=> eql_{i}_{j} is_bag_{j}_{i}))\n".format(i=i, j=j))
+
+        for i in range(1, n + 1):
+            for j in range(1, n + 1):
+                self.stream.write("(declare-const is_forbidden_{}_{} Bool)\n".format(i, j))
+
+        for i in range(1, n + 1):
+            self.stream.write(
+                "(assert (not is_forbidden_{i}_{i}))\n".format(i=i))
+
+            for j in range(i + 1, n + 1):
+                self.stream.write(
+                    "(assert (=> (and ord_{i}_{j} covers_{j}_{i} (not eql_{i}_{j})) is_forbidden_{j}_{i}))\n".format(i=i, j=j))
+                self.stream.write(
+                    "(assert (=> (and (not ord_{i}_{j}) covers_{i}_{j} (not eql_{i}_{j})) is_forbidden_{i}_{j}))\n".format(
+                        i=i, j=j))
+
+                for k in range(1, n + 1):
+                    self.stream.write(
+                        "(assert (=> (and arc_{i}_{j} is_forbidden_{j}_{k}) is_forbidden_{i}_{k})))\n".format(i=i, j=j, k=k))
+                    self.stream.write(
+                        "(assert (=> (and arc_{j}_{i} is_forbidden_{i}_{k}) is_forbidden_{j}_{k})))\n".format(i=i, j=j,
+                                                                                                              k=k))
+
+                self.stream.write("(declare-const is_forbidden_{}_{} Bool)\n".format(i, j))
+
+        # for i in range(1, n + 1):
+        #     for j in range(i+1, n + 1):
+        #         self.stream.write(
+        #             "(assert (=> (and arc_{i}_{j} covers_{j}_{i}) is_bag_{j}_{i}))\n".format(i=i, j=j))
+        #         self.stream.write(
+        #             "(assert (=> (and arc_{j}_{i} covers_{i}_{j}) is_bag_{i}_{j})))\n".format(i=i, j=j))
