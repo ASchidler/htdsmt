@@ -35,8 +35,9 @@ for i in range(1, 200, 2):
         if htd is None and res is not None:
             res = solver.solve(base_output_path, base_output_file, file, htd=True, arcs=arcs, sb=False,
                                fix_val=last_val, timeout=900)
-        else:
-            res = solver.solve(base_output_path, base_output_file, file, htd=htd, sb=htd, timeout=900)
+        elif htd is not None:
+            lb = None if res is None else res.size
+            res = solver.solve(base_output_path, base_output_file, file, htd=htd, sb=htd, timeout=900, lb=lb)
             if htd is None:
                 htd = True
 
@@ -44,11 +45,11 @@ for i in range(1, 200, 2):
             sys.stdout.write("Failed!\tTime:{}\n".format(time.time() - before_tm))
         else:
             # Display the HTD
-            td = res['decomposition']
+            td = res.decomposition
             num_edges = len(td.T.edges)
-            arcs = res['arcs']
-            ord = res['ord']
-            last_val = res['objective']
+            arcs = res.arcs
+            ord = res.ordering
+            last_val = res.size
             edges = [(i, j) for i, j in td.tree.edges]
             bags = td.bags
 
@@ -58,7 +59,7 @@ for i in range(1, 200, 2):
 
             sys.stdout.write("{}\tResult: {}\tValid:  {}\tSP: {}\tGHTD: {}\tTime: {}\n".format(
                 htd,
-                res['objective'],
+                res.size,
                 valid,
                 valid_sc,
                 valid_ghtd,

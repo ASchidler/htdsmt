@@ -756,7 +756,7 @@ class Hypergraph(object):
         if len(X) <= 1:
             return
         if self.__non_numerical:
-            X = map(self.__nsymtab.get, X)
+            X = list(map(self.__nsymtab.get, X))
         # print X
         if edge_id is None:
             edge_id = len(self.__edges) + 1

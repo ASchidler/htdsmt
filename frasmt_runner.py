@@ -22,10 +22,12 @@ parser.add_argument('-s', dest='sb', action='store_false',
                    help='Deactivate Symmetry Breaking')
 
 parser.add_argument('-mode', dest='mode', type=int, default=3, choices=range(0, 5),
-                    help='The mode:\n 1: Compute a GHTD and try to repair the bags for a HTD (bag repair).\n'
+                    help='The mode:\n '
+                         '0: Only compute a GHTD\n'
+                         '1: Compute a GHTD and try to repair the bags for a HTD (bag repair).\n'
                          '2: Compute a GHTD and initialize HTD calculation with a partial result from the GHTD (SMT-repair).\n'
                          '3 (default): Compute the HTD from scratch\n'
-                         '4: Portfolio mode, try 1, 2, 3 and stop on first valid decomposition')
+                         '4: Portfolio mode, try 1->2->3 and stop on first valid decomposition')
 
 parser.add_argument('-l', dest='force_lex', action='store_true', default=False,
                     help='Force lexicographic ordering withing equivalence groups (mode 2 only)')
@@ -62,9 +64,9 @@ fl = 'solve_runner'
 if args.mode != 3:
     res = solver.solve(tmp_dir, fl, args.graph, htd=False, force_lex=False,
                        sb=args.sb if args.mode <= 1 else False, heuristic_repair=repair, clique_mode=clique_mode, timeout=900)
-    td = res['decomposition'] if res is not None else None
+    td = res.decomposition if res is not None else None
     if td is not None and GeneralizedHypertreeDecomposition.validate(td, td.hypergraph):
-        lb = res['objective']
+        lb = res.size
 
 # Use stratified encoding
 if args.mode == 2 and res is not None and not td.validate(td.hypergraph):
@@ -78,13 +80,13 @@ if args.mode == 2 and res is not None and not td.validate(td.hypergraph):
     # Compute stratified solution
     res = solver.solve(tmp_dir, fl, args.graph, htd=True, force_lex=False, edges=edges, fix_val=result,
                        bags=bags, order=ordering, arcs=arcs, heuristic_repair=False)
-    td = res['decomposition'] if res is not None else None
+    td = res.decomposition if res is not None else None
 
 # Use HTD encoding
 if args.mode >= 3 and (td is None or td.validate(td.hypergraph)):
     res = solver.solve(tmp_dir, fl, args.graph, htd=True, force_lex=args.force_lex, sb=args.sb,
                        heuristic_repair=False, lb=lb)
-    td = res['decomposition']
+    td = res.decomposition
 
 # Display result if available
 if res is None:
@@ -97,7 +99,7 @@ valid_ghtd = GeneralizedHypertreeDecomposition.validate(td, td.hypergraph)
 valid_sc = td.inverse_edge_function_holds()
 
 sys.stdout.write("Result: {}\tValid:  {}\tSP: {}\tGHTD: {}\tin {}\n".format(
-    res['objective'],
+    res.size,
     valid,
     valid_sc,
     valid_ghtd,
@@ -109,7 +111,7 @@ if args.mode > 0 and not valid:
 
 if args.verbose:
     mode = "ghtd" if args.mode == 0 else "htd"
-    print(f"s {mode} {len(td.bags)} {res['objective']} {len(td.hypergraph.nodes())} {len(td.hypergraph.edges())}")
+    print(f"s {mode} {len(td.bags)} {res.size} {len(td.hypergraph.nodes())} {len(td.hypergraph.edges())}")
 
     # Output bags
     for k, v in td.bags.items():

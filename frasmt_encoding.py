@@ -3,6 +3,7 @@ from __future__ import absolute_import
 import re
 from itertools import combinations
 from lib.htd_validate.htd_validate.decompositions import HypertreeDecomposition
+from decomposition_result import DecompositionResult
 
 
 class FraSmtSolver:
@@ -546,8 +547,6 @@ class FraSmtSolver:
         self.fractional_counters(m=m)
         # self.add_all_at_most(m)
 
-        # #THERE IS A PROBLEM WITH MINIMIZATION APPARENTLY
-        # # #WIE WILL STEFAN PROGRESSION ERKLAEREN???
         if optimize:
             self.stream.write("(minimize m)\n")
         self.stream.write("(check-sat)\n(get-model)\n")
@@ -618,11 +617,10 @@ class FraSmtSolver:
         except KeyError:
             raise ValueError("Could not parse output. In case of mode 2 may indicate unsat, otherwise check error log.")
 
-        ret.update({"objective": htdd.width(), "decomposition": htdd, "arcs": arcs, "ord": ordering, "weights": weights})
         # if not htd.validate(self.hypergraph):
         #     raise RuntimeError("Found a GHTD that is not a HTD")
 
-        return ret
+        return DecompositionResult(htdd.width(), htdd, arcs, ordering, weights)
 
     def _get_ordering(self, model):
         ordering = []
