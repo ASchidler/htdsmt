@@ -6,6 +6,7 @@ import sys
 import logging
 import frasmt_solver as solver
 from lib.htd_validate.htd_validate.decompositions import GeneralizedHypertreeDecomposition
+import time
 
 # End of imports
 
@@ -20,10 +21,11 @@ parser.add_argument('-s', dest='sb', action='store_false',
                    default=True,
                    help='Deactivate Symmetry Breaking')
 
-parser.add_argument('-mode', dest='mode', type=int, default=3, choices=range(0, 4),
+parser.add_argument('-mode', dest='mode', type=int, default=3, choices=range(0, 5),
                     help='The mode:\n 1: Compute a GHTD and try to repair the bags for a HTD (bag repair).\n'
                          '2: Compute a GHTD and initialize HTD calculation with a partial result from the GHTD (SMT-repair).\n'
-                         '3 (default): Compute the HTD from scratch')
+                         '3 (default): Compute the HTD from scratch\n'
+                         '4: Portfolio mode, try 1, 2, 3 and stop on first valid decomposition')
 
 parser.add_argument('-l', dest='force_lex', action='store_true', default=False,
                     help='Force lexicographic ordering withing equivalence groups (mode 2 only)')
@@ -40,22 +42,32 @@ parser.add_argument('-o', dest='use_ordering', action='store_true', default=Fals
 parser.add_argument('-b', dest='use_bags', action='store_true', default=False,
                     help='During SMT-Repair initialize HTD calculation with bags.')
 parser.add_argument('-d', dest='tmp_dir', default='/tmp', help='Path for temporary files, defaults to /tmp')
-parser.add_argument('-v', dest='verbose', default=True, help='Output decomposition')
+parser.add_argument('-v', dest='verbose', action='store_false', default=True, help='Supress output of decomposition')
 
 args = parser.parse_args()
 tmp_dir = args.tmp_dir.strip()
 
-htd = args.mode == 3
 # Use cliques only for GHTD. For HTD they even slow the heuristic methods down
 clique_mode = 1 if args.mode == 0 else 0
-# Use heuristic repair only for mode 1
-repair = args.mode == 1
+# Use heuristic repair only for mode 1. In all other modes, the output is already a valid HTD
+repair = args.mode == 1 or args.mode == 4
 
-# Compute solution
-res = solver.solve(tmp_dir, "slv_runner", args.graph, htd=htd, force_lex=args.force_lex, sb=args.sb)
+td = None
+res = None
+lb = None
+before_tm = time.time()
+fl = 'solve_runner'
+
+# Compute solution for GHTD
+if args.mode != 3:
+    res = solver.solve(tmp_dir, fl, args.graph, htd=False, force_lex=False,
+                       sb=args.sb if args.mode <= 1 else False, heuristic_repair=repair, clique_mode=clique_mode, timeout=900)
+    td = res['decomposition'] if res is not None else None
+    if td is not None and GeneralizedHypertreeDecomposition.validate(td, td.hypergraph):
+        lb = res['objective']
 
 # Use stratified encoding
-if args.mode == 2 and res is not None:
+if args.mode == 2 and res is not None and not td.validate(td.hypergraph):
     td = res['decomposition']
     arcs = res['arcs'] if args.use_arcs else None
     ordering = res['ord'] if args.use_ordering else None
@@ -64,8 +76,15 @@ if args.mode == 2 and res is not None:
     bags = td.bags if args.use_bags else None
 
     # Compute stratified solution
-    res = solver.solve(tmp_dir, "slv", args.graph, htd=True, force_lex=False, edges=edges, fix_val=result,
+    res = solver.solve(tmp_dir, fl, args.graph, htd=True, force_lex=False, edges=edges, fix_val=result,
                        bags=bags, order=ordering, arcs=arcs, heuristic_repair=False)
+    td = res['decomposition'] if res is not None else None
+
+# Use HTD encoding
+if args.mode >= 3 and (td is None or td.validate(td.hypergraph)):
+    res = solver.solve(tmp_dir, fl, args.graph, htd=True, force_lex=args.force_lex, sb=args.sb,
+                       heuristic_repair=False, lb=lb)
+    td = res['decomposition']
 
 # Display result if available
 if res is None:
@@ -73,17 +92,16 @@ if res is None:
           "the timout has been reached. See output model and error file for potential error messages.")
 
 # Display the HTD
-td = res['decomposition']
-
 valid = td.validate(td.hypergraph)
 valid_ghtd = GeneralizedHypertreeDecomposition.validate(td, td.hypergraph)
 valid_sc = td.inverse_edge_function_holds()
 
-sys.stdout.write("Result: {}\tValid:  {}\tSP: {}\tGHTD: {}\t\n".format(
+sys.stdout.write("Result: {}\tValid:  {}\tSP: {}\tGHTD: {}\tin {}\n".format(
     res['objective'],
     valid,
     valid_sc,
-    valid_ghtd
+    valid_ghtd,
+    time.time() - before_tm
 ))
 
 if args.mode > 0 and not valid:
