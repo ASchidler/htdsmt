@@ -14,7 +14,7 @@ logging.disable(logging.FATAL)
 base_output_path = '/tmp'
 base_output_file = 'slv'
 
-for i in range(1, 200, 2):
+for i in range(17, 200, 2):
     if i == 18 or i == 20:
         continue
 
@@ -36,7 +36,10 @@ for i in range(1, 200, 2):
             res = solver.solve(base_output_path, base_output_file, file, htd=True, arcs=arcs, sb=False,
                                fix_val=last_val, timeout=900)
         elif htd is not None:
+            # This uses the previous result as a lower bound for the htd encoding, good to test portfolio approach
+            # bad to compare
             lb = None if res is None else res.size
+
             res = solver.solve(base_output_path, base_output_file, file, htd=htd, sb=htd, timeout=900, lb=lb)
             if htd is None:
                 htd = True

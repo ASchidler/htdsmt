@@ -15,7 +15,7 @@ import bounds.lower_bounds as lbs
 
 
 def solve(output_path, output_name, input_file, clique_mode=0, htd=True, lb=None, arcs=None, order=None, force_lex=False,
-          fix_val=None, edges=None, bags=None, sb=True, timeout=0, heuristic_repair=True):
+          fix_val=None, edges=None, bags=None, sb=True, timeout=0, heuristic_repair=True, weighted=False):
 
     # Open output files, these are used to interface with the solver
     base_path = os.path.join(output_path, output_name)
@@ -25,9 +25,9 @@ def solve(output_path, output_name, input_file, clique_mode=0, htd=True, lb=None
 
     # Load graph. There is no working auto detect of encoding, so try both options
     hypergraph_in = Hypergraph.from_file(input_file, fischl_format=False)
-    hypergraph2 = Hypergraph.from_file(input_file, fischl_format=True)
+    hypergraph2 = Hypergraph.from_file(input_file, fischl_format=True, weighted=weighted)
 
-    if len(hypergraph2.edges()) > len(hypergraph_in.edges()):
+    if hypergraph_in is None or (hypergraph2 is not None and len(hypergraph2.edges()) > len(hypergraph_in.edges())):
         hypergraph_in = hypergraph2
 
     # Check if the vertex label is continuous
@@ -49,13 +49,15 @@ def solve(output_path, output_name, input_file, clique_mode=0, htd=True, lb=None
 
     # Create encoding
     ub = None
+    # This computes an upper bound to use. In general it would be better to use ub-1 as an upper bound
+    # if this fails, then the approximation is a solution, or if we have a ghtd with value ub, we also know
+    # that the approximation is a valid upper bound
     # if fix_val is None and ub is None:
     #     ub = ubs.greedy(hypergraph, htd)
     #     print(ub)
-    #     print(lbs.mmd(hypergraph, ub))
     enc = frasmt_encoding.FraSmtSolver(hypergraph, stream=inpf, checker_epsilon=None)
     enc.solve(htd=htd, force_lex=force_lex, edges=edges, fix_val=fix_val, bags=bags, order=order, arcs=arcs,
-              sb=sb, clique=clique, lb=lb, ub=ub)
+              sb=sb, clique=clique, lb=lb, ub=ub, weighted=weighted)
     inpf.seek(0)
 
     # Find and start solver, either in path or current directory
@@ -80,8 +82,9 @@ def solve(output_path, output_name, input_file, clique_mode=0, htd=True, lb=None
 
     # Load the resulting model
     try:
-        res = enc.decode(outp, False, htd=htd, repair=heuristic_repair)
+        res = enc.decode(outp, False, htd=htd, repair=heuristic_repair, weighted=weighted)
     except ValueError as ee:
+        raise ee
         return None
 
     if reverse_mapping:
@@ -116,7 +119,7 @@ def check_hypergraph_continuity(hg):
 
     for k, e in hg.edges().items():
         new_e = [mapping[x] for x in e]
-        hypergraph.add_hyperedge(new_e, edge_id=k)
+        hypergraph.add_hyperedge(new_e, edge_id=k, weight=None if hg.weights() is None else hg.weights()[k])
 
     return hypergraph, reverse_mapping
 

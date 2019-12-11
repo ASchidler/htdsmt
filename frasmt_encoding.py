@@ -24,7 +24,7 @@ class FraSmtSolver:
         self.wprecision = wprecision
         self.stream.write('(set-option :print-success false)\n(set-option :produce-models true)\n')
 
-    def prepare_vars(self):
+    def prepare_vars(self, weighted):
         n = self.hypergraph.number_of_nodes()
         m = self.hypergraph.number_of_edges()
 
@@ -56,10 +56,18 @@ class FraSmtSolver:
             for ej in range(1, m + 1):
                 # (declare-const weight_j_e Real)
                 self.weight[j][ej] = self.add_var(name='weight_%s_e%s' % (j, ej))
-                self.stream.write("(declare-const weight_{i}_e{ej} Int)\n".format(i=j, ej=ej))
 
-                self.stream.write("(assert (<= weight_{i}_e{ej} 1))\n".format(i=j, ej=ej))
-                self.stream.write("(assert (>= weight_{i}_e{ej} 0))\n".format(i=j, ej=ej))
+                # TODO: Int is probably faster, real is more generic...
+                if weighted:
+                    self.stream.write("(declare-const weight_{i}_e{ej} Int)\n".format(i=j, ej=ej))
+                    # TODO: Check for optimal encoding
+                    self.stream.write("(assert ( or (= weight_{i}_e{ej} 0) (=  weight_{i}_e{ej} {w})))\n"
+                                      .format(i=j, ej=ej, w=int(self.hypergraph.weights()[ej])))
+                else:
+                    self.stream.write("(declare-const weight_{i}_e{ej} Int)\n".format(i=j, ej=ej))
+
+                    self.stream.write("(assert (<= weight_{i}_e{ej} 1))\n".format(i=j, ej=ej))
+                    self.stream.write("(assert (>= weight_{i}_e{ej} 0))\n".format(i=j, ej=ej))
 
     def add_cards(self, C):
         self.cards.append(C)
@@ -87,7 +95,7 @@ class FraSmtSolver:
         self.num_cls += 1
 
     # prepare variables
-    def fractional_counters(self, m=None):
+    def fractional_counters(self, m, weighted):
         n = self.hypergraph.number_of_nodes()
 
         for j in range(1, n + 1):
@@ -96,12 +104,11 @@ class FraSmtSolver:
                 assert (e > 0)
                 weights.append("weight_{j}_e{e}".format(j=j, e=e))
 
+            weights = f"(+ {' '.join(weights)})" if len(weights) > 1 else weights[0]
+
+            self.stream.write("(assert ( <= {weights} {m}))\n".format(weights=weights, m=m))
+
             # set optimization variable or value for SAT check
-            if len(weights) > 1:
-                self.stream.write(
-                    "(assert ( <= (+ {weights}) {m}))\n".format(weights=" ".join(weights), m=m))
-            elif len(weights) == 1:
-                self.stream.write("(assert (<= {} {}))\n".format(weights[0], m))
 
     def elimination_ordering(self, n):
         tord = lambda p, q: 'ord_{p}_{q}'.format(p=p, q=q) if p < q \
@@ -163,7 +170,7 @@ class FraSmtSolver:
             # self.stream.write("(assert (not arc_{i}_{i}))\n".format(i=i))
             self.add_clause([-self.arc[i][i]])
 
-    def cover(self, n):
+    def cover(self, n, weighted):
         # If a vertex j is in the bag, it must be covered:
         # assert (=> arc_ij  (>= (+ weight_j_e2 weight_j_e5 weight_j_e7 ) 1) )
         # TODO: double-check the iterator over i
@@ -178,23 +185,22 @@ class FraSmtSolver:
                 for e in self.hypergraph.incident_edges(j):
                     weights.append("weight_{i}_e{e}".format(i=i, e=e))
 
-                if len(weights) > 1:
-                    self.stream.write(
-                        "(assert (=> arc_{i}_{j} (>= (+ {weights}) 1)))\n".format(i=i, j=j, weights=" ".join(weights)))
-                else:
-                    self.stream.write(
-                        "(assert (=> arc_{i}_{j} (>= {weights} 1)))\n".format(i=i, j=j, weights=weights[0]))
+                summed = f"(+ {' '.join(weights)})" if len(weights) > 1 else weights[0]
+                compared = f">= {summed} 1" if not weighted else f"> {summed} 0"
+
+                self.stream.write(
+                    "(assert (=> arc_{i}_{j} ({weights})))\n".format(i=i, j=j, weights=compared))
 
             # arc_ij then i most be covered by some edge (because i will end up in one bag)
             weights = []
             for e in self.hypergraph.incident_edges(i):
                 weights.append("weight_{i}_e{e}".format(i=i, e=e))
 
-            if len(weights) > 1:
-                self.stream.write(
-                    "(assert (>= (+ {weights}) 1))\n".format(weights=" ".join(weights)))
-            elif len(weights) == 1:
-                self.stream.write("(assert (>= {} 1))\n".format(weights[0]))
+            summed = f"(+ {' '.join(weights)})" if len(weights) > 1 else weights[0]
+            compared = f">= {summed} 1" if not weighted else f"> {summed} 0"
+
+            self.stream.write(
+                "(assert ({weights}))\n".format(i=i, j=j, weights=compared))
 
     def break_clique(self, clique):
         if clique:
@@ -254,7 +260,7 @@ class FraSmtSolver:
                 vvars = []
                 for e in self.hypergraph.incident_edges(j):
                     vvars.append("(> weight_{i}_e{e} 0)".format(i=i, e=e))
-                    self.stream.write("(assert (=> (= weight_{i}_e{e} 1) covers_{i}_{j}))\n".format(i=i, j=j, e=e))
+                    self.stream.write("(assert (=> (> weight_{i}_e{e} 0) covers_{i}_{j}))\n".format(i=i, j=j, e=e))
                 self.stream.write("(assert (or (not covers_{i}_{j}) {vvars}))\n".format(vvars=" ".join(vvars), i=i, j=j))
 
         # Establish root
@@ -485,12 +491,12 @@ class FraSmtSolver:
 
                 self.stream.write("(assert (or ord_{i}_{j} arc_{j}_{i} {vvars}))\n".format(vvars=" ".join(vvars), i=i, j=j))
 
-    def encode(self, clique=None, twins=None, htd=True, arcs=None, order=None, enforce_lex=True, edges=None, bags=None, sb=True):
+    def encode(self, clique=None, twins=None, htd=True, arcs=None, order=None, enforce_lex=True, edges=None, bags=None, sb=True, weighted=False):
         n = self.hypergraph.number_of_nodes()
 
         self.break_clique(clique=clique)
         self.elimination_ordering(n)
-        self.cover(n)
+        self.cover(n, weighted)
         self.encode_twins(twin_iter=twins, clique=clique)
         if sb:
             self.break_order_symmetry()
@@ -525,11 +531,18 @@ class FraSmtSolver:
                     self.stream.write("(assert is_bag_{i}_{j})\n".format(i=i, j=j))
 
     def solve(self, clique=None, twins=None, optimize=True, htd=True, lb=None, ub=None, arcs=None, order=None, force_lex=True,
-              fix_val=None, edges=None, bags=None, sb=True):
+              fix_val=None, edges=None, bags=None, sb=True, weighted=False):
         var = self.add_var("m")
         m = self._vartab[var]
-        self.stream.write("(declare-const m Int)\n")
-        self.stream.write("(assert (>= m 1))\n")
+
+        if weighted:
+            if htd:
+                raise RuntimeError("Weights are not yet supported for hypertree decompositions.")
+            self.stream.write("(declare-const m Real)\n")
+            self.stream.write("(assert (> m 0))\n")
+        else:
+            self.stream.write("(declare-const m Int)\n")
+            self.stream.write("(assert (>= m 1))\n")
 
         if fix_val:
             self.stream.write("(assert (= m {}))\n".format(fix_val))
@@ -539,31 +552,35 @@ class FraSmtSolver:
             if lb:
                 self.stream.write("(assert (>= m {}))\n".format(lb))
 
-        self.prepare_vars()
+        self.prepare_vars(weighted)
 
-        self.encode(clique=clique, twins=twins, htd=htd, arcs=arcs, order=order, enforce_lex=force_lex, edges=edges, bags=bags, sb=sb)
+        self.encode(clique=clique, twins=twins, htd=htd, arcs=arcs, order=order, enforce_lex=force_lex, edges=edges, bags=bags, sb=sb, weighted=weighted)
 
         # assert(False)
-        self.fractional_counters(m=m)
+        self.fractional_counters(m, weighted)
         # self.add_all_at_most(m)
 
         if optimize:
             self.stream.write("(minimize m)\n")
         self.stream.write("(check-sat)\n(get-model)\n")
 
-    def decode(self, output, is_z3, htd=False, repair=True):
-        ret = {"objective": "nan", "decomposition": None, "arcs": None, "ord": None, "weights": None}
-
+    def decode(self, output, is_z3, htd=False, repair=True, weighted=False):
         model = {}
 
         if not is_z3:
-            lines = re.findall('\(([^ ]*) ([a-zA-Z0-9]*)\)', output)
+            lines = re.findall('\(([^ ]+) ([a-zA-Z0-9\( \/\)]*)\)', output)
 
             for nm, val in lines:
+                # Last entry sometimes has the closing ) in the line
+                val = val.replace(")", "").strip()
+
                 if val == "true":
                     model[nm] = True
                 elif val == "false":
                     model[nm] = False
+                elif "/" in val:
+                    str = val.replace("(", "").replace(")", "").replace("/", "").strip().split(" ")
+                    model[nm] = int(str[0]) * 1.0 / int(str[1])
                 else:
                     model[nm] = int(val)
         else:
@@ -579,7 +596,7 @@ class FraSmtSolver:
 
         try:
             ordering = self._get_ordering(model)
-            weights = self._get_weights(model, ordering)
+            weights = self._get_weights(model, ordering, weighted)
             arcs = self._get_arcs(model)
             #edges = self._get_edges(model) if htd else None
             edges = None
@@ -636,7 +653,7 @@ class FraSmtSolver:
 
         return ordering
 
-    def _get_weights(self, model, ordering):
+    def _get_weights(self, model, ordering, weighted):
         ret = {}
         n = self.hypergraph.number_of_nodes()
 

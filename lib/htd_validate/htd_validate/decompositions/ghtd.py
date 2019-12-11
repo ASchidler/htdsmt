@@ -130,6 +130,8 @@ class GeneralizedHypertreeDecomposition(Decomposition):
         ret = set()
         # {v \in V(H) : (sum_{e \in E(H), v \in e} lambda_u(e)) \geq 1 } =>
         # {v : v \in V(H), (sum{lambda_u(e) : e \in E(H), v \in e}) \geq 1 }
+        # TODO: This has originally been designed for fractional case, i.e. summing up the weights works, but
+        # is unnecessary
         for v in self.hypergraph.nodes():
             logging.info('v = %s' % v)
             # e \in E(H), v \in e: self._edge_ids_where_v_occurs(v)
@@ -143,7 +145,7 @@ class GeneralizedHypertreeDecomposition(Decomposition):
             logging.info("  @Epsilon=%s" % self.epsilon)
             # REQUIRED DUE TO FLOATING POINT ISSUES
             # see: https://docs.python.org/2/tutorial/floatingpoint.html
-            if bag_sum >= 1:
+            if bag_sum > 0:
                 ret.add(v)
         logging.info("B(lambda_%s) = '%s'" % (t, ret))
         return ret

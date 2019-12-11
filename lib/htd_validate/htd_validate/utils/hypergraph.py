@@ -98,6 +98,7 @@ class Hypergraph(object):
 
     def __init__(self, non_numerical=False, vertices=None):
         self.__edges = dict()
+        self.__weights = None
         if vertices is None:
             vertices = set()
         self.__vertices = vertices
@@ -638,20 +639,22 @@ class Hypergraph(object):
     def fromstream_dimacslike(clazz, stream):
         num_edges = 0
         num_verts = 0
-
-        is_dimacs = True
-        HG = clazz()
-        for line in stream.readlines():
-            line = line.split()
-            if not line:
-                continue
-            elif line[0] == 'p':
-                is_dimacs = line[1] == 'htd'
-            elif line[0] != 'c':
-                if is_dimacs:
-                    HG.add_hyperedge(map(int, line[1:]))
-                else:
-                    HG.add_hyperedge(map(int, line))
+        try:
+            is_dimacs = True
+            HG = clazz()
+            for line in stream.readlines():
+                line = line.split()
+                if not line:
+                    continue
+                elif line[0] == 'p':
+                    is_dimacs = line[1] == 'htd'
+                elif line[0] != 'c':
+                    if is_dimacs:
+                        HG.add_hyperedge(map(int, line[1:]))
+                    else:
+                        HG.add_hyperedge(map(int, line))
+        except ValueError:
+            return None
 
         if HG.number_of_edges() < num_edges:
             print("edges missing: read=%s announced=%s" % (HG.number_of_edges(), num_edges))
@@ -662,45 +665,58 @@ class Hypergraph(object):
     # TODO: symtab
 
     @classmethod
-    def fromstream_fischlformat(clazz, stream):
+    def fromstream_fischlformat(clazz, stream, weighted=False):
         HG = clazz(non_numerical=True)
+
+        if weighted:
+            HG.__weights = dict()
 
         for line in stream:
             line = line.replace('\n', '')[:-1]
             edge_name = None
             edge_vertices = []
             #replace whitespaces
-            line = line.replace(' ','')
+            line = line.replace(' ', '')
 
             collect = []
+            passed = False
             for char in line:
-                if char == '(':
-                    edge_name = ''.join(collect)
+                if not passed:
+                    if char == '(':
+                        edge_name = ''.join(collect)
+                        collect = []
+                    elif char == ',' or char == ')':
+                        edge_vertices.append(''.join(collect))
+                        collect = []
+                if char == ')':
                     collect = []
-                elif char == ',' or char == ')':
-                    edge_vertices.append(''.join(collect))
-                    collect = []
-                elif char != ')':
+                    passed = True
+                else:
                     collect.append(char)
+
             # print(edge_vertices)
-            HG.add_hyperedge(edge_vertices, name=edge_name)
+            weight = None
+            if weighted:
+                weight = float(''.join(collect).strip())
+            HG.add_hyperedge(edge_vertices, name=edge_name, weight=weight)
+
         return HG
 
     # TODO: move from_file to a central part
 
     @classmethod
-    def from_file(clazz, filename, strict=False, fischl_format=False):
+    def from_file(clazz, filename, strict=False, fischl_format=False, weighted=False):
         """
         :param filename: name of the file to read from
         :type filename: string
         :rtype: Graph
         :return: a list of edges and number of vertices
         """
-        return clazz._from_file(filename, fischl_format=fischl_format)
+        return clazz._from_file(filename, fischl_format=fischl_format, weighted=weighted)
 
     # TODO: check whether we need the header_only option
     @classmethod
-    def _from_file(clazz, filename, header_only=False, fischl_format=False):
+    def _from_file(clazz, filename, header_only=False, fischl_format=False, weighted=False):
         """
         :param filename: name of the file to read from
         :type filename: string
@@ -725,8 +741,10 @@ class Hypergraph(object):
             else:
                 raise IOError('Unknown input type "%s" for file "%s"' % (mtype, filename))
             if fischl_format:
-                hypergraph = Hypergraph.fromstream_fischlformat(stream)
+                hypergraph = Hypergraph.fromstream_fischlformat(stream, weighted=weighted)
             else:
+                if weighted:
+                    raise IOError('Weights are not supported with DIMACS format')
                 hypergraph = Hypergraph.fromstream_dimacslike(stream)
         finally:
             if stream:
@@ -749,7 +767,10 @@ class Hypergraph(object):
         self.__vertices.add(v)
         return v
 
-    def add_hyperedge(self, X, name=None, edge_id=None):
+    def add_hyperedge(self, X, name=None, edge_id=None, weight=None):
+        if weight is not None and self.__weights is None:
+            self.__weights = {}
+
         # print name
         # Convert to list, Python 2 to Python 3 migration
         X = list(X)
@@ -765,14 +786,16 @@ class Hypergraph(object):
             self.__elabel[edge_id] = name
 
         # remove/avoid already subsets of edges
-        if not self.is_subsumed(set(X), checkSubsumes=True):
+        if not self.is_subsumed(set(X), checkSubsumes=True, weight=weight):
             self.__edges[edge_id] = Hypergraph.__edge_type(X)
             self.__vertices.update(X)
+            if weight is not None:
+                self.__weights[edge_id] = weight
         # else:
         #    print("subsumed: ", X)
         return X
 
-    def is_subsumed(self, sx, checkSubsumes=False, modulo=-1):
+    def is_subsumed(self, sx, checkSubsumes=False, modulo=-1, weight=None):
         for k, e in self.__edges.items():
             if k == modulo:
                 continue
@@ -783,6 +806,8 @@ class Hypergraph(object):
                 # self.__edges[k][:] = sx
                 self.__edges[k] = Hypergraph.__edge_type(sx)
                 self.__vertices.update(sx)
+                if weight is not None:
+                    self.__weights[k] = weight
                 return True
         return False
 
@@ -803,6 +828,9 @@ class Hypergraph(object):
 
     def get_nsymtab(self):
         return self.__nsymtab
+
+    def weights(self):
+        return self.__weights
 
     def write_dimacs(self, stream):
         return self.write_graph(stream, dimacs=True)

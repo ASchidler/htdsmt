@@ -44,7 +44,8 @@ parser.add_argument('-o', dest='use_ordering', action='store_true', default=Fals
 parser.add_argument('-b', dest='use_bags', action='store_true', default=False,
                     help='During SMT-Repair initialize HTD calculation with bags.')
 parser.add_argument('-d', dest='tmp_dir', default='/tmp', help='Path for temporary files, defaults to /tmp')
-parser.add_argument('-v', dest='verbose', action='store_false', default=True, help='Supress output of decomposition')
+parser.add_argument('-v', dest='verbose', action='store_false', default=True, help='Suppress output of decomposition')
+parser.add_argument('-w', dest='weighted', action='store_true', default=False, help='Input hypergraph is weighted, optimize for these weights')
 
 args = parser.parse_args()
 tmp_dir = args.tmp_dir.strip()
@@ -63,7 +64,8 @@ fl = 'solve_runner'
 # Compute solution for GHTD
 if args.mode != 3:
     res = solver.solve(tmp_dir, fl, args.graph, htd=False, force_lex=False,
-                       sb=args.sb if args.mode <= 1 else False, heuristic_repair=repair, clique_mode=clique_mode, timeout=900)
+                       sb=args.sb if args.mode <= 1 else False, heuristic_repair=repair, clique_mode=clique_mode, timeout=900,
+                       weighted=args.weighted)
     td = res.decomposition if res is not None else None
     if td is not None and GeneralizedHypertreeDecomposition.validate(td, td.hypergraph):
         lb = res.size
@@ -79,13 +81,13 @@ if args.mode == 2 and res is not None and not td.validate(td.hypergraph):
 
     # Compute stratified solution
     res = solver.solve(tmp_dir, fl, args.graph, htd=True, force_lex=False, edges=edges, fix_val=result,
-                       bags=bags, order=ordering, arcs=arcs, heuristic_repair=False)
+                       bags=bags, order=ordering, arcs=arcs, heuristic_repair=False, weighted=args.weighted)
     td = res.decomposition if res is not None else None
 
 # Use HTD encoding
 if args.mode >= 3 and (td is None or td.validate(td.hypergraph)):
     res = solver.solve(tmp_dir, fl, args.graph, htd=True, force_lex=args.force_lex, sb=args.sb,
-                       heuristic_repair=False, lb=lb)
+                       heuristic_repair=False, lb=lb, weighted=args.weighted)
     td = res.decomposition
 
 # Display result if available
