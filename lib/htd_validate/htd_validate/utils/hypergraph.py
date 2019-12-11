@@ -688,7 +688,9 @@ class Hypergraph(object):
                     elif char == ',' or char == ')':
                         edge_vertices.append(''.join(collect))
                         collect = []
-                if char == ')':
+                    else:
+                        collect.append(char)
+                elif char == ')':
                     collect = []
                     passed = True
                 else:
