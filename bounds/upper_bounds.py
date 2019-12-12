@@ -25,7 +25,7 @@ def compute_ordering(pg):
     return ordering
 
 
-def greedy(g, htd):
+def greedy(g, htd, bb=True):
     # Build primal graph
     pg = Graph()
     for e in g.edges():
@@ -36,11 +36,13 @@ def greedy(g, htd):
     bags, tree, root = ordering_to_decomp(pg, ordering)
 
     # In case of HTD we require to not violate the special condition
+    simplify_decomp(bags, tree)
     if htd:
-        simplify_decomp(bags, tree)
         edge_cover = cover_htd(g, bags, tree, root)
     else:
         edge_cover = cover_ghtd(g, bags)
+        if bb:
+            bandb(g, bags, edge_cover)
 
     return max(sum(v.values()) for v in edge_cover.values())
 
@@ -106,9 +108,9 @@ def cover_ghtd(g, bags):
     for k, v in bags.items():
         remaining = set(v)
 
-        # cover bag, maximize cover, minimize remainder
+        # cover bag, minimize cost per covered vertex
         while len(remaining) > 0:
-            c_best = (0, None, None)
+            c_best = (0.0, None, None)
             for e, ed in g.edges().items():
                 ed = set(ed)
 
@@ -164,3 +166,83 @@ def cover_htd(g, bags, tree, root):
 
     return edge_cover
 
+
+def bandb(g, bags, cover):
+    """Tries to improve a given cover, by computing the optimal cover via branch and bound"""
+
+    w = g.weights() if g.weights else None
+
+    def bb_rec(b, edges, c, pos, val, ub):
+        """Recursive function that computes the cover. Use pos=-1 and value False for call. Returns maxsize of no better
+        solution could be found."""
+
+        # Reached the end, but did not fill the bag...
+        if pos == len(edges):
+            return maxsize, None
+
+        nb = b
+        nc = c
+
+        # If we should add the edge, add costs and remove from bag
+        if val:
+            e, ed = edges[pos]
+
+            # Hyperedge does not contribute anything, adding it cannot be optimal
+            if len(ed & b) == 0:
+                return maxsize, None
+
+            nc = c + w[e] if w else c + 1
+
+            # Exceed upper bound -> suboptimal
+            if nc >= ub:
+                return maxsize, None
+
+            nb = b - ed
+            # Found a solution, that is cheaper, return
+            if len(nb) == 0:
+                return nc, [e]
+
+        # Subcalls
+        res1 = bb_rec(nb, edges, nc, pos + 1, True, ub)
+        res2 = bb_rec(nb, edges, nc, pos + 1, False, min(ub, res1[0]))
+
+        # Retain the minimal found solution and return it, if it is an improvement
+        res = min(res1, res2)
+
+        if res[0] < ub:
+            if val:
+                res[1].append(edges[pos][0])
+
+            return res
+
+        # Default return in case the solution is not an improvement
+        return maxsize, None
+
+    # Not execute the B&B for every bag. First calculate the width and process in reverse order
+    # Using this ordering, we can stop whenever we cannot improve a bag, as subsequent improvement will not
+    # decrease the width
+    bounds_bags = [
+        (sum(x for x in cover[k].values()), k, v) for k, v in bags.items()]
+
+    bounds_bags.sort(reverse=True)
+
+    c_global_ub = 0
+    for b_ub, k, v in bounds_bags:
+        # Global upper bound cannot be improved by improving this bag, nothing can be done
+        if b_ub <= c_global_ub:
+            return
+
+        # Filter out only those edges that may cover the bag. This may be inefficient...
+        relevant_edges = [(e, set(ed) & v) for e, ed in g.edges().items() if len(set(ed) & v) > 0]
+        # Start recursive call
+        res = bb_rec(v, relevant_edges, 0, -1, False, b_ub)
+
+        # Apply new cover if better
+        if res[0] < b_ub:
+            if w:
+                cover[k] = {e: w[e] for e in res[1]}
+            else:
+                cover[k] = {e: 1 for e in res[1]}
+
+        # This is valid due to the sort order
+        c_global_ub = min(res[0], b_ub)

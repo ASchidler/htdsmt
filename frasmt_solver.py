@@ -12,6 +12,7 @@ from itertools import combinations
 
 import bounds.upper_bounds as ubs
 import bounds.lower_bounds as lbs
+import weighted.weight_upper_bound as wub
 
 
 def solve(output_path, output_name, input_file, clique_mode=0, htd=True, lb=None, arcs=None, order=None, force_lex=False,
@@ -53,7 +54,7 @@ def solve(output_path, output_name, input_file, clique_mode=0, htd=True, lb=None
     # if this fails, then the approximation is a solution, or if we have a ghtd with value ub, we also know
     # that the approximation is a valid upper bound
     if fix_val is None and ub is None:
-        ub = ubs.greedy(hypergraph, htd)
+        ub = ubs.greedy(hypergraph, htd) if not weighted else wub.greedy(hypergraph)
         print(ub)
     enc = frasmt_encoding.FraSmtSolver(hypergraph, stream=inpf, checker_epsilon=None)
     enc.solve(htd=htd, force_lex=force_lex, edges=edges, fix_val=fix_val, bags=bags, order=order, arcs=arcs,
