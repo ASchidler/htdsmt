@@ -3,87 +3,74 @@ from itertools import combinations
 from sys import maxsize
 from random import randint
 
-def greedy(g, htd):
-    #TODO: Avoid the many copies of the primal graph...
 
-    # Build primal graph
-    pv = Graph()
-    for e in g.edges():
-        # PRIMAL GRAPH CONSTRUCTION
-        for u, v in combinations(g.get_edge(e), 2):
-            pv.add_edge(u, v)
-
+def compute_ordering(pg):
     # Build elimination ordering
     ordering = []
-    pvo = pv.copy()
+    g = pg.copy()
 
-    while len(ordering) < len(pvo.nodes):
-        # Min Degree with random tiebreaker, tiebreak leads no irrepdoducibility
-        #_, _, n = min((len(pv[x]), randint(0, 100), x) for x in pv.nodes)
-        _, n = min((len(pv[x]), x) for x in pv.nodes)
+    while len(ordering) < len(pg.nodes):
+        # Min Degree with random tiebreaker, tiebreak leads no irreproducibility
+        # _, _, n = min((len(pv[x]), randint(0, 100), x) for x in pv.nodes)
+        _, n = min((len(g[x]), x) for x in g.nodes)
         ordering.append(n)
-        nb = pv[n]
+        nb = g[n]
         for u in nb:
             for v in nb:
                 if u > v:
-                    pv.add_edge(u, v)
+                    g.add_edge(u, v)
 
-        pv.remove_node(n)
+        g.remove_node(n)
 
-    bags = ordering_to_decomp(pvo, ordering)
-    edge_cover = {n: {e: 0 for e in g.edges().keys()} for n in pvo.nodes}
+    return ordering
+
+
+def greedy(g, htd):
+    # Build primal graph
+    pg = Graph()
+    for e in g.edges():
+        for u, v in combinations(g.get_edge(e), 2):
+            pg.add_edge(u, v)
+
+    ordering = compute_ordering(pg)
+    bags, tree, root = ordering_to_decomp(pg, ordering)
 
     # In case of HTD we require to not violate the special condition
     if htd:
-        tree = DiGraph()
-        ps = {x: ordering.index(x) for x in ordering}
-        for n in ordering:
-            if n != ordering[len(ordering) - 1]:
-                _, nxt = min((ps[x], x) for x in bags[n] if ps[x] > ps[n])
-                tree.add_edge(nxt, n)
-        edge_cover = ghtd_to_htd(tree, bags, g)
+        simplify_decomp(bags, tree)
+        edge_cover = cover_htd(g, bags, tree, root)
     else:
-        for k, v in bags.items():
-            remaining = set(v)
-
-            # cover bag, maximize cover, minimize remainder
-            while len(remaining) > 0:
-                c_best = (0, None, None)
-                for e, ed in g.edges().items():
-                    ed = set(ed)
-
-                    intersect = len(remaining & ed)
-                    if intersect > c_best[0]:
-                        c_best = (intersect, e, ed)
-
-                _, e, ed = c_best
-                remaining -= ed
-                edge_cover[k][e] = 1
+        edge_cover = cover_ghtd(g, bags)
 
     return max(sum(v.values()) for v in edge_cover.values())
 
 
-def ordering_to_decomp(g_in, ordering):
+def ordering_to_decomp(pg, ordering):
     """Converts an elimination ordering into a decomposition"""
 
-    # TODO: Return full decomp, not only bags
-    # ps = {x: ordering.index(x) for x in ordering}
-    g = g_in.copy()
-    bags = {}
+    tree = DiGraph()
+    ps = {x: ordering.index(x) for x in ordering}
+    bags = {n: {n} for n in ordering}
+
+    for u, v in pg.edges:
+        if ps[v] < ps[u]:
+            u, v = v, u
+        bags[u].add(v)
+
     for n in ordering:
-        bags[n] = {n}
-        if len(g.nodes) > 1:
-            bags[n].update(g[n])
-            for u in g[n]:
-                for v in g[n]:
-                    if u < v:
-                        g.add_edge(u, v)
-            g.remove_node(n)
+        A = set(bags[n])
+        if len(A) > 1:
+            A.remove(n)
+            _, nxt = min((ps[x], x) for x in A)
 
-    return bags
+            bags[nxt].update(A)
+            tree.add_edge(nxt, n)
+
+    return bags, tree, ordering[-1]
 
 
-def ghtd_to_htd(tree, bags, g):
+def simplify_decomp(bags, tree):
+    """Simplifies the decomposition by eliminating subsumed bags. This usually results in fewer bags."""
     # Eliminate subsumed bags
     cnt = 0
     changed = True
@@ -112,14 +99,32 @@ def ghtd_to_htd(tree, bags, g):
                     changed = True
                     break
 
-    # Now that the tree is potentially simpler, try to cover the bags
-    # Proceed top down
-    # find root:
-    c_root = next(tree.nodes.__iter__())
-    while len(tree.pred[c_root]) > 0:
-        c_root = next(tree.pred[c_root].__iter__())
 
-    q1 = [c_root]
+def cover_ghtd(g, bags):
+    edge_cover = {n: {e: 0 for e in g.edges().keys()} for n in g.nodes()}
+
+    for k, v in bags.items():
+        remaining = set(v)
+
+        # cover bag, maximize cover, minimize remainder
+        while len(remaining) > 0:
+            c_best = (0, None, None)
+            for e, ed in g.edges().items():
+                ed = set(ed)
+
+                intersect = len(remaining & ed)
+                if intersect > c_best[0]:
+                    c_best = (intersect, e, ed)
+
+            _, e, ed = c_best
+            remaining -= ed
+            edge_cover[k][e] = 1
+
+    return edge_cover
+
+
+def cover_htd(g, bags, tree, root):
+    q1 = [root]
     q2 = []
 
     edge_cover = {n: {e: 0 for e in g.edges().keys()} for n in tree.nodes}

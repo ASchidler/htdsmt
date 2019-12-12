@@ -106,7 +106,7 @@ class FraSmtSolver:
 
             weights = f"(+ {' '.join(weights)})" if len(weights) > 1 else weights[0]
 
-            self.stream.write("(assert ( <= {weights} {m}))\n".format(weights=weights, m=m))
+            self.stream.write("(assert (<= {weights} {m}))\n".format(weights=weights, m=m))
 
             # set optimization variable or value for SAT check
 
@@ -186,7 +186,7 @@ class FraSmtSolver:
                     weights.append("weight_{i}_e{e}".format(i=i, e=e))
 
                 summed = f"(+ {' '.join(weights)})" if len(weights) > 1 else weights[0]
-                compared = f">= {summed} 1" if not weighted else f"> {summed} 0"
+                compared = f">= {summed} 1" if not weighted else f">= {summed} 1"
 
                 self.stream.write(
                     "(assert (=> arc_{i}_{j} ({weights})))\n".format(i=i, j=j, weights=compared))
@@ -197,7 +197,7 @@ class FraSmtSolver:
                 weights.append("weight_{i}_e{e}".format(i=i, e=e))
 
             summed = f"(+ {' '.join(weights)})" if len(weights) > 1 else weights[0]
-            compared = f">= {summed} 1" if not weighted else f"> {summed} 0"
+            compared = f">= {summed} 1" if not weighted else f">= {summed} 1"
 
             self.stream.write(
                 "(assert ({weights}))\n".format(i=i, j=j, weights=compared))
@@ -470,12 +470,6 @@ class FraSmtSolver:
                     if i == k or j == k:
                         continue
 
-                    # self.stream.write(
-                    #     "(assert (or {ord1} (not {ord2}) (not arc_{k}_{i}) block_{i}_{j}_{k}))\n"
-                    #         .format(i=i, j=j, k=k, ord1=tord(i, j), ord2=tord(j, k)))
-                    # self.stream.write(
-                    #     "(assert (or (not block_{i}_{j}_{k}) (not {ord1})))\n"
-                    #     .format(i=i, j=j, k=k, ord1=tord(i, j), ord2=tord(j, k)))
                     self.stream.write(
                         "(assert (or (not {ord}) (not arc_{k}_{i}) block_{i}_{j}_{k}))\n"
                             .format(i=i, j=j, k=k, ord=tord(j, k)))
@@ -535,14 +529,11 @@ class FraSmtSolver:
         var = self.add_var("m")
         m = self._vartab[var]
 
-        if weighted:
-            if htd:
-                raise RuntimeError("Weights are not yet supported for hypertree decompositions.")
-            self.stream.write("(declare-const m Real)\n")
-            self.stream.write("(assert (> m 0))\n")
-        else:
-            self.stream.write("(declare-const m Int)\n")
-            self.stream.write("(assert (>= m 1))\n")
+        if weighted and htd:
+            raise RuntimeError("Weights are not yet supported for hypertree decompositions.")
+
+        self.stream.write("(declare-const m Int)\n")
+        self.stream.write("(assert (>= m 1))\n")
 
         if fix_val:
             self.stream.write("(assert (= m {}))\n".format(fix_val))

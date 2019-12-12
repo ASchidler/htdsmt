@@ -145,7 +145,8 @@ class GeneralizedHypertreeDecomposition(Decomposition):
             logging.info("  @Epsilon=%s" % self.epsilon)
             # REQUIRED DUE TO FLOATING POINT ISSUES
             # see: https://docs.python.org/2/tutorial/floatingpoint.html
-            if bag_sum > 0:
+            # TODO: If the weights are smaller than one, this causes problems
+            if bag_sum >= 1:
                 ret.add(v)
         logging.info("B(lambda_%s) = '%s'" % (t, ret))
         return ret

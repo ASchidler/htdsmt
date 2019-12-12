@@ -52,9 +52,9 @@ def solve(output_path, output_name, input_file, clique_mode=0, htd=True, lb=None
     # This computes an upper bound to use. In general it would be better to use ub-1 as an upper bound
     # if this fails, then the approximation is a solution, or if we have a ghtd with value ub, we also know
     # that the approximation is a valid upper bound
-    # if fix_val is None and ub is None:
-    #     ub = ubs.greedy(hypergraph, htd)
-    #     print(ub)
+    if fix_val is None and ub is None:
+        ub = ubs.greedy(hypergraph, htd)
+        print(ub)
     enc = frasmt_encoding.FraSmtSolver(hypergraph, stream=inpf, checker_epsilon=None)
     enc.solve(htd=htd, force_lex=force_lex, edges=edges, fix_val=fix_val, bags=bags, order=order, arcs=arcs,
               sb=sb, clique=clique, lb=lb, ub=ub, weighted=weighted)
