@@ -698,8 +698,9 @@ class Hypergraph(object):
 
             # print(edge_vertices)
             weight = None
-            if weighted:
-                weight = float(''.join(collect).strip())
+            rest = ''.join(collect).strip()
+            if len(rest) > 0:
+                weight = int(rest)
             HG.add_hyperedge(edge_vertices, name=edge_name, weight=weight)
 
         return HG
