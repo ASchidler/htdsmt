@@ -667,41 +667,104 @@ class Hypergraph(object):
     @classmethod
     def fromstream_fischlformat(clazz, stream, weighted=False):
         HG = clazz(non_numerical=True)
+        # 0 = name, 1 = vertices, 2 = weight
+        mode = 0
+        edge_name = None
+        edge_vertices = []
+        done = False
+        newline = True
+        comment = False
 
         if weighted:
             HG.__weights = dict()
 
-        for line in stream:
-            line = line.replace('\n', '')[:-1]
-            edge_name = None
-            edge_vertices = []
-            #replace whitespaces
-            line = line.replace(' ', '')
+        buffer = []
+        while True:
+            char = stream.read(1)
 
-            collect = []
-            passed = False
-            for char in line:
-                if not passed:
-                    if char == '(':
-                        edge_name = ''.join(collect)
-                        collect = []
-                    elif char == ',' or char == ')':
-                        edge_vertices.append(''.join(collect))
-                        collect = []
+            if len(char) < 1:
+                break
+
+            if newline:
+                newline = False
+                if char == "%":
+                    comment = True
+
+            if char == "\n":
+                newline = True
+                comment = False
+
+            # Ignore linebreaks and stuff
+            if char.isprintable() and not comment:
+                if done:
+                    raise AttributeError("Got end of definition, found printable characters afterwards")
+                if char == '(':
+                    if mode == 0:
+                        mode = 1
+                        edge_name = ''.join(buffer).strip()
+                        buffer = []
                     else:
-                        collect.append(char)
+                        raise AttributeError("Unexpected (")
                 elif char == ')':
-                    collect = []
-                    passed = True
-                else:
-                    collect.append(char)
+                    if mode == 1:
+                        edge_vertices.append(''.join(buffer).strip())
+                        buffer = []
+                        mode = 2
+                    else:
+                        raise AttributeError("Unexpected )")
+                elif mode == 1 and char == ',':
+                    edge_vertices.append(''.join(buffer).strip())
+                    buffer = []
+                elif mode == 2 and (char == ',' or char == '.'):
+                    if char == '.':
+                        done = True
+                    mode = 0
 
-            # print(edge_vertices)
-            weight = None
-            rest = ''.join(collect).strip()
-            if len(rest) > 0:
-                weight = int(rest)
-            HG.add_hyperedge(edge_vertices, name=edge_name, weight=weight)
+                    edge_weight = ''.join(buffer).strip()
+                    weight = int(edge_weight) if len(edge_weight) > 0 else None
+                    HG.add_hyperedge(edge_vertices, name=edge_name, weight=weight)
+
+                    edge_name = None
+                    edge_vertices = []
+                    buffer = []
+                elif char == '.':
+                    raise AttributeError("Unexpected .")
+                elif char == ',':
+                    raise AttributeError("Unexpected ,")
+                else:
+                    buffer.append(char)
+
+        # for line in stream:
+        #     line = line.replace('\n', '')[:-1]
+        #     edge_name = None
+        #     edge_vertices = []
+        #     #replace whitespaces
+        #     line = line.replace(' ', '')
+        #
+        #     collect = []
+        #     passed = False
+        #     for char in line:
+        #         if not passed:
+        #             if char == '(':
+        #                 edge_name = ''.join(collect)
+        #                 collect = []
+        #             elif char == ',' or char == ')':
+        #                 edge_vertices.append(''.join(collect))
+        #                 collect = []
+        #             else:
+        #                 collect.append(char)
+        #         elif char == ')':
+        #             collect = []
+        #             passed = True
+        #         else:
+        #             collect.append(char)
+        #
+        #     # print(edge_vertices)
+        #     weight = None
+        #     rest = ''.join(collect).strip()
+        #     if len(rest) > 0:
+        #         weight = int(rest)
+        #     HG.add_hyperedge(edge_vertices, name=edge_name, weight=weight)
 
         return HG
 

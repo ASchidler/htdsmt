@@ -51,7 +51,7 @@ args = parser.parse_args()
 tmp_dir = args.tmp_dir.strip()
 
 # Use cliques only for GHTD. For HTD they even slow the heuristic methods down
-clique_mode = 1 if args.mode == 0 else 0
+clique_mode = 2 if args.mode == 0 else 0
 # Use heuristic repair only for mode 1. In all other modes, the output is already a valid HTD
 repair = args.mode == 1 or args.mode == 4
 
@@ -64,7 +64,7 @@ fl = 'solve_runner'
 # Compute solution for GHTD
 if args.mode != 3:
     res = solver.solve(tmp_dir, fl, args.graph, htd=False, force_lex=False,
-                       sb=args.sb if args.mode <= 1 else False, heuristic_repair=repair, clique_mode=clique_mode, timeout=900,
+                       sb=args.sb if args.mode <= 1 else False, heuristic_repair=repair, clique_mode=clique_mode,
                        weighted=args.weighted)
     td = res.decomposition if res is not None else None
     if td is not None and GeneralizedHypertreeDecomposition.validate(td, td.hypergraph):
@@ -93,7 +93,7 @@ if args.mode >= 3 and (td is None or td.validate(td.hypergraph)):
 # Display result if available
 if res is None:
     print("No model. For heuristic methods this can signal a failure. In case of a timeout used, this can mean "
-          "the timout has been reached. See output model and error file for potential error messages.")
+          "the timeout has been reached. See output model and error file for potential error messages.")
 
 # Display the HTD
 valid = td.validate(td.hypergraph)
