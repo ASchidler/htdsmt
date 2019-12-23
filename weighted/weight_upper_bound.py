@@ -13,7 +13,7 @@ def greedy(g, bb=True):
 
     ordering = ub.compute_ordering(pg)
     bags, tree, root = ub.ordering_to_decomp(pg, ordering)
-
+    ub.improve_scramble(pg, ordering, bound=max(len(b) - 2 for b in bags.values()))
     ub.simplify_decomp(bags, tree)
     edge_cover = greedy_cover(g, bags)
 

@@ -4,7 +4,7 @@ from lib.htd_validate.htd_validate.utils.hypergraph import Hypergraph
 import sys
 
 
-def generate(path_in, path_out, seed, suffix=".w2"):
+def generate(path_in, path_out, seed, suffix=".w1"):
     random.seed = seed
     in_abs = os.path.abspath(path_in)
     out_abs = os.path.abspath(path_out)
@@ -18,7 +18,7 @@ def generate(path_in, path_out, seed, suffix=".w2"):
         for file in f:
             f_in = os.path.join(r, file)
             f_out = os.path.join(new_path, file + suffix)
-            modify_file_dechter(f_in, f_out)
+            modify_file_uniform(f_in, f_out)
             print(f"Finished {f_in}")
 
 

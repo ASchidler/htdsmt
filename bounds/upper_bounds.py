@@ -34,6 +34,7 @@ def greedy(g, htd, bb=True):
 
     ordering = compute_ordering(pg)
     bags, tree, root = ordering_to_decomp(pg, ordering)
+    improve_scramble(pg, ordering, bound=max(len(b)-2 for b in bags.values()))
 
     # In case of HTD we require to not violate the special condition
     simplify_decomp(bags, tree)
@@ -45,6 +46,32 @@ def greedy(g, htd, bb=True):
             bandb(g, bags, edge_cover)
 
     return max(sum(v.values()) for v in edge_cover.values())
+
+
+def improve_scramble(g, ordering, rounds=100, bound=maxsize, interval=15):
+    """Tries to improve the bound by randomly scrambling the elements in an interval"""
+
+    limit = len(ordering) - 1 - interval if len(ordering) > interval else 0
+    interval = min(interval, len(ordering))
+
+    for _ in range(0, rounds):
+        index = randint(0, limit) if limit > 0 else 0
+
+        old = ordering[index:index+interval]
+        for c_i in range(0, interval-1):
+            randindex = randint(0, interval - 1 - c_i) + index + c_i
+            ordering[index + c_i], ordering[randindex] = ordering[randindex], ordering[index + c_i]
+
+        result = max(len(x) for x in ordering_to_decomp(g, ordering)[0].values()) - 1
+
+        # If the new bound is worse, restore
+        if result > bound:
+            for i in range(0, interval):
+                ordering[index + i] = old[i]
+        else:
+            bound = result
+
+    return bound
 
 
 def ordering_to_decomp(pg, ordering):
