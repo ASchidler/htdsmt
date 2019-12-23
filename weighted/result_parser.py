@@ -48,6 +48,7 @@ with open(outp, "w") as output:
                         output.write(f";{width};{weight};{tm}")
                     else:
                         output.write(";;;")
+                output.write(os.linesep)
 
     # Output aggregated results
     for name, (cnt, width, weight, time) in results.items():
