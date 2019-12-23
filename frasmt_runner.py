@@ -72,10 +72,10 @@ if args.mode != 3:
 
 # Use stratified encoding
 if args.mode == 2 and res is not None and not td.validate(td.hypergraph):
-    td = res['decomposition']
-    arcs = res['arcs'] if args.use_arcs else None
-    ordering = res['ord'] if args.use_ordering else None
-    result = res['objective']
+    td = res.decomposition
+    arcs = res.arcs if args.use_arcs else None
+    ordering = res.ordering if args.use_ordering else None
+    result = res.size
     edges = [(i, j) for i, j in td.tree.edges] if args.use_tree else None
     bags = td.bags if args.use_bags else None
 
@@ -85,7 +85,7 @@ if args.mode == 2 and res is not None and not td.validate(td.hypergraph):
     td = res.decomposition if res is not None else None
 
 # Use HTD encoding
-if args.mode >= 3 and (td is None or td.validate(td.hypergraph)):
+if args.mode >= 3 and (td is None or not td.validate(td.hypergraph)):
     res = solver.solve(tmp_dir, fl, args.graph, htd=True, force_lex=args.force_lex, sb=args.sb,
                        heuristic_repair=False, lb=lb, weighted=args.weighted)
     td = res.decomposition
