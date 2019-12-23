@@ -496,7 +496,7 @@ class FraSmtSolver:
             self.break_order_symmetry()
 
         if htd:
-            self.encode_htd2(n, enforce_lex)
+            self.encode_htd2(n, enforce_lex, weighted=weighted)
 
         if arcs:
             for i in range(1, n + 1):
@@ -528,9 +528,6 @@ class FraSmtSolver:
               fix_val=None, edges=None, bags=None, sb=True, weighted=False):
         var = self.add_var("m")
         m = self._vartab[var]
-
-        if weighted and htd:
-            raise RuntimeError("Weights are not yet supported for hypertree decompositions.")
 
         self.stream.write("(declare-const m Int)\n")
         self.stream.write("(assert (>= m 1))\n")
@@ -727,7 +724,7 @@ class FraSmtSolver:
 
         return desc
 
-    def encode_htd2(self, n, enforce_lex=True):
+    def encode_htd2(self, n, enforce_lex=True, weighted=False):
 
         def tord(ix, jx):
             return 'ord_{}_{}'.format(ix, jx) if ix < jx else '(not ord_{}_{})'.format(jx, ix)
@@ -744,8 +741,14 @@ class FraSmtSolver:
             for j in range(1, n + 1):
                 vvars = []
                 for e in self.hypergraph.incident_edges(j):
+                    # TODO: >0 better or =1 ?
                     vvars.append("(> weight_{i}_e{e} 0)".format(i=i, e=e))
-                    self.stream.write("(assert (=> (= weight_{i}_e{e} 1) covers_{i}_{j}))\n".format(i=i, j=j, e=e))
+                    if weighted:
+                        self.stream.write("(assert (=> (> weight_{i}_e{e} 0) covers_{i}_{j}))\n".format(i=i, j=j, e=e))
+                    else:
+                        self.stream.write("(assert (=> (= weight_{i}_e{e} 1) covers_{i}_{j}))\n".format(i=i, j=j, e=e))
+
+                # TODO: Is this really necessary? As it is more optimal to not cover, this should be obsolete...
                 self.stream.write("(assert (or (not covers_{i}_{j}) {vvars}))\n".format(vvars=" ".join(vvars), i=i, j=j))
 
         # Add equivalence relation
@@ -800,10 +803,19 @@ class FraSmtSolver:
                                               .format(i=i, j=j, k=k, ord1=tord(j, i), ord2=tord(j, k)))
 
                 for e in range(1, m + 1):
-                    self.stream.write("(assert (or (not eql_{i}_{j}) (not (= weight_{i}_e{e} 1)) (= weight_{j}_e{e} 1)))\n"
-                                      .format(i=i, j=j, e=e))
-                    self.stream.write("(assert (or (not eql_{i}_{j}) (not (= weight_{j}_e{e} 1)) (= weight_{i}_e{e} 1)))\n"
-                        .format(i=i, j=j, e=e))
+                    # Isn't this a consequence?
+                    if weighted:
+                        self.stream.write(
+                            "(assert (or (not eql_{i}_{j}) (not (> weight_{i}_e{e} 0)) (> weight_{j}_e{e} 0)))\n"
+                            .format(i=i, j=j, e=e))
+                        self.stream.write(
+                            "(assert (or (not eql_{i}_{j}) (not (> weight_{j}_e{e} 0)) (> weight_{i}_e{e} 0)))\n"
+                            .format(i=i, j=j, e=e))
+                    else:
+                        self.stream.write("(assert (or (not eql_{i}_{j}) (not (= weight_{i}_e{e} 1)) (= weight_{j}_e{e} 1)))\n"
+                                          .format(i=i, j=j, e=e))
+                        self.stream.write("(assert (or (not eql_{i}_{j}) (not (= weight_{j}_e{e} 1)) (= weight_{i}_e{e} 1)))\n"
+                            .format(i=i, j=j, e=e))
 
         # Add bag finding
         for i in range(1, n + 1):

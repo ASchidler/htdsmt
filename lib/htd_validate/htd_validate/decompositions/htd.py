@@ -135,6 +135,7 @@ class HypertreeDecomposition(GeneralizedHypertreeDecomposition):
                     while val > 0 and len(residue) > 0:
                         # Try to find an edge that covers as many of the sought vertices as possible (heuristic)
                         # Idea: on a tie, use the edge that would add the least amount of covered vertices?
+                        # TODO: Here is potential for the weighted case
                         e = None
                         e_val = -1
                         for cE in (x for x, v in self.hyperedge_function[t].items() if v == 0):
@@ -145,7 +146,10 @@ class HypertreeDecomposition(GeneralizedHypertreeDecomposition):
                                 e = cE
 
                         # Add the hyperedge
-                        self.hyperedge_function[t][e] = 1
+                        if self.hypergraph.weights():
+                            self.hyperedge_function[t][e] = self.weights()[e]
+                        else:
+                            self.hyperedge_function[t][e] = 1
                         residue = residue - set(self.hypergraph.get_edge(e))
                         val -= 1
 
