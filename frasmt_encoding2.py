@@ -135,24 +135,26 @@ class FraSmtSolver:
 
     def special_condition(self, n):
         # Find out which nodes cover which vertices
+
         for i in range(1, n + 1):
             for j in range(1, n + 1):
-                self.stream.write("(declare-const covers_{i}_{j} Bool)\n".format(i=i, j=j))
+                if i == j:
+                    continue
 
-            for e in self.hypergraph.edges():
-                # PRIMAL GRAPH CONSTRUCTION
-                for j in self.hypergraph.get_edge(e):
-                    self.stream.write("(assert (or (= weight_{i}_e{e} 0) covers_{i}_{j}))\n".format(i=i, j=j, e=e))
+                weights = []
+                for e in self.hypergraph.incident_edges(j):
+                    weights.append("weight_{i}_e{e}".format(i=i, e=e))
 
-        for i in range(1, n+1):
-            for j in range(1, n+1):
-                for k in range(1, n+1):
+                total = "(+ {weights})".format(weights=" ".join(weights)) if len(weights) > 1 else weights[0]
+
+                for k in range(1, n + 1):
                     if i == k:
                         continue
 
-                    clauses = "bag_{i}_{j} (not covers_{i}_{j}) (not desc_{k}_{i}) (not bag_{k}_{j})"\
-                        .format(i=i, j=j, k=k)
-                    self.stream.write("(assert (or {clauses}))\n".format(clauses=clauses))
+                    clause = "bag_{i}_{j} (= {weights} 0) (not desc_{k}_{i}) (not bag_{k}_{j})"\
+                        .format(i=i, j=j, k=k, weights=total)
+
+                    self.stream.write("(assert (or {clause}))\n".format(clause=clause))
 
     def solve(self, optimize=True, htd=True, lb=None, ub=None, arcs=None, order=None, force_lex=True,
               fix_val=None, edges=None, bags=None, sb=True, weighted=False):
