@@ -33,6 +33,7 @@ class FraSmtSolver:
             for j in range(1, n + 1):
                 self.stream.write("(declare-const desc_{i}_{j} Bool)\n".format(i=i, j=j))
                 self.stream.write("(declare-const bag_{i}_{j} Bool)\n".format(i=i, j=j))
+                self.stream.write("(declare-const cover_{i}_{j} Bool)\n".format(i=i, j=j))
 
             for ej in range(1, m + 1):
                 self.stream.write("(declare-const weight_{i}_e{ej} Int)\n".format(i=i, ej=ej))
@@ -52,8 +53,6 @@ class FraSmtSolver:
             weights = f"(+ {' '.join(weights)})" if len(weights) > 1 else weights[0]
 
             self.stream.write("(assert (<= {weights} m))\n".format(weights=weights))
-
-            # set optimization variable or value for SAT check
 
     def structure(self, n):
         # There has to be one root
@@ -81,11 +80,13 @@ class FraSmtSolver:
                     # Transitivity
                     self.stream.write("(assert (or (not desc_{i}_{j}) (not desc_{j}_{k}) desc_{i}_{k}))\n".
                                       format(i=i, j=j, k=k))
-                    # Enforces only one parent
-                    self.stream.write("(assert (or (not desc_{i}_{j}) (not desc_{i}_{k}) desc_{j}_{k} desc_{k}_{j}))\n".
-                                      format(i=i, j=j, k=k))
 
-    def bags(self, n):
+                    # Enforces only one parent
+                    if k > j:
+                        self.stream.write("(assert (or (not desc_{i}_{j}) (not desc_{i}_{k}) desc_{j}_{k} desc_{k}_{j}))\n".
+                                          format(i=i, j=j, k=k))
+
+    def bags(self, n, htd):
         for i in range(1, n+1):
             self.stream.write("(assert bag_{i}_{i})\n".format(i=i))
 
@@ -110,13 +111,34 @@ class FraSmtSolver:
             for j in range(1, n+1):
                 if i == j:
                     continue
+
                 self.stream.write(
                     "(assert (or desc_{i}_{j} desc_{j}_{i} (not bag_{j}_{i})))\n".format(i=i, j=j))
+
                 for k in range(1, n+1):
                     if i == k or j == k:
                         continue
                     self.stream.write(clause_str.format(i=i, j=j, k=k))
                     self.stream.write(clause_str2.format(i=i, j=j, k=k))
+
+    def optimizations(self, n, htd):
+        for i in range(1, n+1):
+            incident = set()
+            for e in self.hypergraph.incident_edges(i):
+                incident.update(self.hypergraph.get_edge(e))
+            incident.remove(i)
+
+            for j in range(1, n+1):
+                if i == j:
+                    continue
+
+                if htd:
+                    # for htd it must hold, that vertices may only appear in bags above the node, if incident
+                    if j not in incident:
+                        self.stream.write("(assert (or (not desc_{i}_{j}) (not bag_{j}_{i})))\n".format(i=i, j=j))
+                # for ghtd it must hold that vertices are not in bags above the node (as in elimination orderings)
+                else:
+                    self.stream.write("(assert (or (not desc_{i}_{j}) (not bag_{j}_{i})))\n".format(i=i, j=j))
 
     def cover(self, n):
         # If a vertex j is in the bag, it must be covered:
@@ -172,10 +194,11 @@ class FraSmtSolver:
                 self.stream.write("(assert (>= m {}))\n".format(lb))
 
         self.prepare_vars()
-        self.structure(n)
         self.cover(n)
-        self.bags(n)
+        self.structure(n)
+        self.bags(n, htd)
         self.counters()
+        self.optimizations(n, htd)
 
         if htd:
             self.special_condition(n)
