@@ -33,7 +33,6 @@ class FraSmtSolver:
             for j in range(1, n + 1):
                 self.stream.write("(declare-const desc_{i}_{j} Bool)\n".format(i=i, j=j))
                 self.stream.write("(declare-const bag_{i}_{j} Bool)\n".format(i=i, j=j))
-                self.stream.write("(declare-const cover_{i}_{j} Bool)\n".format(i=i, j=j))
 
             for ej in range(1, m + 1):
                 self.stream.write("(declare-const weight_{i}_e{ej} Int)\n".format(i=i, ej=ej))

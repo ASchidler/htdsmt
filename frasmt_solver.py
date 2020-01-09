@@ -1,4 +1,5 @@
 import frasmt_encoding
+import frasmt_encoding2
 import os
 import subprocess
 from shutil import which
@@ -32,8 +33,9 @@ def solve(output_path, output_name, input_file, clique_mode=0, htd=True, lb=None
         hypergraph_in = hypergraph2
 
     # Check if the vertex label is continuous
-    hypergraph, reverse_mapping = check_hypergraph_continuity(hypergraph_in)
-
+   # hypergraph, reverse_mapping = check_hypergraph_continuity(hypergraph_in)
+    hypergraph = hypergraph_in
+    reverse_mapping = None
     # Find clique if requested
     clique = None
     if clique_mode > 0:
@@ -59,6 +61,8 @@ def solve(output_path, output_name, input_file, clique_mode=0, htd=True, lb=None
     enc = frasmt_encoding.FraSmtSolver(hypergraph, stream=inpf, checker_epsilon=None)
     enc.solve(htd=htd, force_lex=force_lex, edges=edges, fix_val=fix_val, bags=bags, order=order, arcs=arcs,
               sb=sb, clique=clique, lb=lb, ub=ub, weighted=weighted)
+    # enc = frasmt_encoding2.FraSmtSolver(hypergraph, stream=inpf, checker_epsilon=None)
+    # enc.solve(htd=htd)
     inpf.seek(0)
 
     # Find and start solver, either in path or current directory

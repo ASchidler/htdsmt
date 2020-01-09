@@ -98,7 +98,7 @@ def ordering_to_decomp(pg, ordering):
     return bags, tree, ordering[-1]
 
 
-def simplify_decomp(bags, tree):
+def simplify_decomp(bags, tree, cover=None):
     """Simplifies the decomposition by eliminating subsumed bags. This usually results in fewer bags."""
     # Eliminate subsumed bags
     cnt = 0
@@ -123,7 +123,11 @@ def simplify_decomp(bags, tree):
                             tree.add_edge(v, u)
                     if bags[u].issubset(nbag):
                         bags[u] = nbag
+                        if cover:
+                            cover[u] = cover[n]
 
+                    cover.pop(n)
+                    bags.pop(n)
                     tree.remove_node(n)
                     changed = True
                     break
