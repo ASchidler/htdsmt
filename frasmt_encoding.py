@@ -265,8 +265,8 @@ class FraSmtSolver:
                         continue
 
                     self.stream.write(
-                        "(assert (or (not {ord}) (not arc_{k}_{i}) block_{i}_{j}_{k}))\n"
-                            .format(i=i, j=j, k=k, ord=tord(j, k)))
+                        f"(assert (or (not {tord(j, k)}) (not arc_{k}_{i}) block_{i}_{j}_{k}))\n"
+                    )
                     self.stream.write(
                         "(assert (or (not block_{i}_{j}_{k}) {ord}))\n"
                             .format(i=i, j=j, k=k, ord=tord(j, k)))
@@ -274,10 +274,6 @@ class FraSmtSolver:
                     self.stream.write(
                         "(assert (or (not block_{i}_{j}_{k}) arc_{k}_{i}))\n"
                             .format(i=i, j=j, k=k))
-
-                    vvars.append("block_{i}_{j}_{k}".format(i=i, j=j, k=k))
-
-                self.stream.write("(assert (or ord_{i}_{j} arc_{j}_{i} {vvars}))\n".format(vvars=" ".join(vvars), i=i, j=j))
 
     def encode(self, clique=None, twins=None, htd=True, arcs=None, order=None, enforce_lex=True, edges=None, bags=None, sb=True, weighted=False):
         n = self.hypergraph.number_of_nodes()
@@ -549,6 +545,7 @@ class FraSmtSolver:
                         continue
                     self.stream.write("(assert (=> (and arc_{i}_{k} (not arc_{j}_{k})) (not subset_{i}_{j})))\n"
                                       .format(i=i, j=j, k=k))
+                    # Keeping these two clauses separate is faster than uniting them
                     self.stream.write("(assert (=> (and (not subset_{j}_{i}) arc_{i}_{j} arc_{j}_{k}) "
                                       "(not subset_{k}_{i})))\n"
                                       .format(i=i, j=j, k=k))
