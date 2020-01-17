@@ -57,6 +57,7 @@ def solve(output_path, output_name, input_file, clique_mode=0, htd=True, lb=None
     #     ub = ubs.greedy(hypergraph, htd) if not weighted else wub.greedy(hypergraph)
     #     print(ub)
     enc = frasmt_encoding.FraSmtSolver(hypergraph, stream=inpf, checker_epsilon=None)
+
     enc.solve(htd=htd, force_lex=force_lex, edges=edges, fix_val=fix_val, bags=bags, order=order, arcs=arcs,
               sb=sb, clique=clique, lb=lb, ub=ub, weighted=weighted)
     inpf.seek(0)
