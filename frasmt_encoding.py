@@ -7,6 +7,7 @@ from decomposition_result import DecompositionResult
 from bounds import upper_bounds
 import networkx as nx
 
+
 class FraSmtSolver:
     def __init__(self, hypergraph, stream, wprecision=20, timeout=0, checker_epsilon=None):
         self.__checker_epsilon = checker_epsilon
@@ -96,7 +97,7 @@ class FraSmtSolver:
         self.num_cls += 1
 
     # prepare variables
-    def fractional_counters(self, m, weighted):
+    def fractional_counters(self, m):
         n = self.hypergraph.number_of_nodes()
 
         for j in range(1, n + 1):
@@ -108,8 +109,6 @@ class FraSmtSolver:
             weights = f"(+ {' '.join(weights)})" if len(weights) > 1 else weights[0]
 
             self.stream.write("(assert (<= {weights} {m}))\n".format(weights=weights, m=m))
-
-            # set optimization variable or value for SAT check
 
     def elimination_ordering(self, n):
         tord = lambda p, q: 'ord_{p}_{q}'.format(p=p, q=q) if p < q \
@@ -173,8 +172,6 @@ class FraSmtSolver:
 
     def cover(self, n, weighted):
         # If a vertex j is in the bag, it must be covered:
-        # assert (=> arc_ij  (>= (+ weight_j_e2 weight_j_e5 weight_j_e7 ) 1) )
-        # TODO: double-check the iterator over i
 
         for i in range(1, n + 1):
             for j in range(1, n + 1):
@@ -187,7 +184,7 @@ class FraSmtSolver:
                     weights.append("weight_{i}_e{e}".format(i=i, e=e))
 
                 summed = f"(+ {' '.join(weights)})" if len(weights) > 1 else weights[0]
-                compared = f">= {summed} 1" if not weighted else f">= {summed} 1"
+                compared = f">= {summed} 1"
 
                 self.stream.write(
                     "(assert (=> arc_{i}_{j} ({weights})))\n".format(i=i, j=j, weights=compared))
@@ -198,10 +195,10 @@ class FraSmtSolver:
                 weights.append("weight_{i}_e{e}".format(i=i, e=e))
 
             summed = f"(+ {' '.join(weights)})" if len(weights) > 1 else weights[0]
-            compared = f">= {summed} 1" if not weighted else f">= {summed} 1"
+            compared = f">= {summed} 1"
 
             self.stream.write(
-                "(assert ({weights}))\n".format(i=i, j=j, weights=compared))
+                "(assert ({weights}))\n".format(i=i, weights=compared))
 
     def break_clique(self, clique):
         if clique:
@@ -335,7 +332,7 @@ class FraSmtSolver:
         self.encode(clique=clique, twins=twins, htd=htd, arcs=arcs, order=order, enforce_lex=force_lex, edges=edges, bags=bags, sb=sb, weighted=weighted)
 
         # assert(False)
-        self.fractional_counters(m, weighted)
+        self.fractional_counters(m)
         # self.add_all_at_most(m)
 
         if optimize:
@@ -374,19 +371,15 @@ class FraSmtSolver:
 
         try:
             ordering = self._get_ordering(model)
-            weights = self._get_weights(model, ordering, weighted)
+            weights = self._get_weights(model, ordering)
             arcs = self._get_arcs(model)
-            #edges = self._get_edges(model) if htd else None
-            edges = None
-            bags = None #self._get_bags(model) if htd else None
-            #edges = None
-            #arcs = None
-            #edges = None
 
             htdd = HypertreeDecomposition.from_ordering(hypergraph=self.hypergraph, ordering=ordering,
                                                         weights=weights,
-                                                        checker_epsilon=self.__checker_epsilon, edges=edges, bags=bags, htd=htd, repair=repair)
+                                                        checker_epsilon=self.__checker_epsilon, htd=htd, repair=repair)
 
+            # This "fixes" the HTD decomposition. The encoding allows the special condition to be violated in special
+            # cases, i.e. if neighboring bags have the same cover and the bags are subsets
             if htd:
                 for i in range(1, self.hypergraph.number_of_nodes()+1):
                     for j in range(1, self.hypergraph.number_of_nodes() + 1):
@@ -423,13 +416,12 @@ class FraSmtSolver:
                             htdd.bags[c_node].update(htdd.bags[d])
                             htdd.hyperedge_function[c_node] = htdd.hyperedge_function[n]
             #upper_bounds.simplify_decomp(htdd.bags, htdd.tree, htdd.hyperedge_function)
-        except RuntimeError:
-            pass
-        #except KeyError:
-        # TODO: We can simplify the HTD, but here we have to take care, that even if neighboring bags are subsets, either
-        # both bags have only one child or the cover is identical. Otherwise, the special condition may be violated.
+        except KeyError:
+            raise ValueError("Could not parse output. In case of mode 2 may indicate unsat, otherwise check error log.")
 
-        #    raise ValueError("Could not parse output. In case of mode 2 may indicate unsat, otherwise check error log.")
+        # We can still simplify the HTD by merging subset-bags. But for HTDs we have to be careful. If we merge up in
+        # the tree, two conditions must hold: 1. The neighbor is a subset, 2. The cover is a superset. Otherwise SP
+        # might get violated. If we merge down, this is not problem and subset is enough.
 
         # if not htd.validate(self.hypergraph):
         #     raise RuntimeError("Found a GHTD that is not a HTD")
@@ -449,7 +441,8 @@ class FraSmtSolver:
             ordering.insert(pos, i)
 
         return ordering
-    def _get_weights(self, model, ordering, weighted):
+
+    def _get_weights(self, model, ordering):
         ret = {}
         n = self.hypergraph.number_of_nodes()
 
@@ -463,20 +456,7 @@ class FraSmtSolver:
         last_vertex = ordering[-1]
         incident_edges = self.hypergraph.incident_edges(last_vertex).keys()
         if len(incident_edges) == 0:
-            raise TypeError("Fractional Hypertree Decompositions for graphs with isolated vertices.")
-
-        return ret
-
-    def _get_bags(self, model):
-        n = self.hypergraph.number_of_nodes()
-        ret = {}
-
-        for i in range(1, n+1):
-            ret[i] = {}
-            #ret[i][i] = True
-            for j in range(1, n+1):
-                #if i != j:
-                ret[i][j] = model["is_bag_{}_{}".format(i, j)]
+            raise TypeError("Hypertree Decompositions for graphs with isolated vertices.")
 
         return ret
 
@@ -492,32 +472,6 @@ class FraSmtSolver:
                     ret[i][j] = model["arc_{}_{}".format(i, j)]
 
         return ret
-
-    def _get_desc(self, model):
-        n = self.hypergraph.number_of_nodes()
-        desc = {}
-        for i in range(1, n+1):
-            val = set()
-            for j in range(1, n+1):
-                if i == j:
-                    continue
-
-                if model["is_desc_{}_{}".format(j, i)]:
-                    val.add(j)
-            desc[i] = val
-
-        return desc
-
-    def _get_eq(self, model):
-        n = self.hypergraph.number_of_nodes()
-        desc = {i: set() for i in range(1, n+1)}
-        for i in range(1, n+1):
-            for j in range(i + 1, n+1):
-                if model["eql_{}_{}".format(i, j)]:
-                    desc[i].add(j)
-                    desc[j].add(i)
-
-        return desc
 
     def encode_htd2(self, n, weighted=False):
         m = self.hypergraph.number_of_edges()
