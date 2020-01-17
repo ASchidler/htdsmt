@@ -95,7 +95,7 @@ class FraSmtSolver:
         self.num_cls += 1
 
     # prepare variables
-    def fractional_counters(self, m, weighted):
+    def fractional_counters(self, weighted):
         n = self.hypergraph.number_of_nodes()
 
         for j in range(1, n + 1):
@@ -106,7 +106,7 @@ class FraSmtSolver:
 
             weights = f"(+ {' '.join(weights)})" if len(weights) > 1 else weights[0]
 
-            self.stream.write("(assert (<= {weights} {m}))\n".format(weights=weights, m=m))
+            self.stream.write("(assert (<= {weights} m))\n".format(weights=weights))
 
             # set optimization variable or value for SAT check
 
@@ -488,10 +488,16 @@ class FraSmtSolver:
     def encode(self, clique=None, twins=None, htd=True, arcs=None, order=None, enforce_lex=True, edges=None, bags=None, sb=True, weighted=False):
         n = self.hypergraph.number_of_nodes()
 
+        self.prepare_vars(weighted)
+        self.stream.write("(declare-const m Int)\n")
+        self.stream.write("(assert (>= m 1))\n")
+
         self.break_clique(clique=clique)
         self.elimination_ordering(n)
         self.cover(n, weighted)
         self.encode_twins(twin_iter=twins, clique=clique)
+        self.fractional_counters(weighted)
+
         if sb:
             self.break_order_symmetry()
 
@@ -526,12 +532,6 @@ class FraSmtSolver:
 
     def solve(self, clique=None, twins=None, optimize=True, htd=True, lb=None, ub=None, arcs=None, order=None, force_lex=True,
               fix_val=None, edges=None, bags=None, sb=True, weighted=False):
-        var = self.add_var("m")
-        m = self._vartab[var]
-
-        self.stream.write("(declare-const m Int)\n")
-        self.stream.write("(assert (>= m 1))\n")
-
         if fix_val:
             self.stream.write("(assert (= m {}))\n".format(fix_val))
         else:
@@ -540,13 +540,7 @@ class FraSmtSolver:
             if lb:
                 self.stream.write("(assert (>= m {}))\n".format(lb))
 
-        self.prepare_vars(weighted)
-
         self.encode(clique=clique, twins=twins, htd=htd, arcs=arcs, order=order, enforce_lex=force_lex, edges=edges, bags=bags, sb=sb, weighted=weighted)
-
-        # assert(False)
-        self.fractional_counters(m, weighted)
-        # self.add_all_at_most(m)
 
         if optimize:
             self.stream.write("(minimize m)\n")
