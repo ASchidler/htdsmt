@@ -15,12 +15,13 @@ fl = 'ghtw_solver2'
 def run_portfolio(c_instance, weighted):
     lb = None
     res = solver.solve(tmp_dir, fl, c_instance, htd=False, force_lex=False,
-                       sb=False, heuristic_repair=True, clique_mode=0,
+                       sb=False, heuristic_repair=False, clique_mode=1,
                        weighted=weighted)
     td = res.decomposition if res is not None else None
     if td is not None and GeneralizedHypertreeDecomposition.validate(td, td.hypergraph):
         lb = res.size
 
+    return res
     # Use stratified encoding
     if res is not None and not td.validate(td.hypergraph):
         td = res.decomposition
@@ -52,6 +53,7 @@ for i in range(1, weighted_instances+1):
     for f in res.decomposition.hyperedge_function.values():
         weight = max(weight, sum(res.decomposition.hypergraph.weights()[k] for k, v in f.items() if v > 0))
     print(f"GHTW{i}: {weight} - width: {res.size} in {time.time() - tm_start}")
+    sys.stdout.flush()
 
     tm_start = time.time()
     res = run_portfolio(instance, True)
@@ -61,3 +63,4 @@ for i in range(1, weighted_instances+1):
         ghtw = max(ghtw, sum(1 for v in f.values() if v > 0))
 
     print(f"WGHTW{i}: {res.size} - width: {ghtw} in {time.time() - tm_start}")
+    sys.stdout.flush()

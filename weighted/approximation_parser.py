@@ -32,7 +32,7 @@ with open(outp, "w") as output:
                     fgroup = int(m.group(1))
                     fbb = True if m.group(2) == "True" else False
                     fweight = int(m.group(3))
-                    ftm = float(m.group(3))
+                    ftm = float(m.group(4))
 
                     name = f"W{fgroup}"
                     if fbb:
@@ -51,6 +51,7 @@ with open(outp, "w") as output:
                         output.write(f";{weight};{tm}")
                     else:
                         output.write(";;")
+                output.write(os.linesep)
 
     # Output aggregated results
     for name, (cnt, weight, time) in results.items():
