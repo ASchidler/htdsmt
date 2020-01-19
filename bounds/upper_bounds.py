@@ -128,6 +128,8 @@ def simplify_decomp(bags, tree):
 
 def cover_ghtd(instance, bags):
     edge_cover = {n: {e: 0 for e in instance.hg.edges().keys()} for n in instance.hg.nodes()}
+
+    # Establish a rank for each vertex, i.e. in how many hyperedges it occurs
     vertex_rank = {}
 
     for v in instance.hg.nodes():
@@ -137,6 +139,7 @@ def cover_ghtd(instance, bags):
                 cnt += 1
         vertex_rank[v] = cnt
 
+    # Cover bags
     for k, v in bags.items():
         remaining = set(v)
 
@@ -200,52 +203,6 @@ def cover_htd(g, bags, tree, root):
     return edge_cover
 
 
-def bandb(instance, bags, cover):
-    """Tries to improve a given cover, by computing the optimal cover via branch and bound"""
-
-    # Not execute the B&B for every bag. First calculate the width and process in reverse order
-    # Using this ordering, we can stop whenever we cannot improve a bag, as subsequent improvement will not
-    # decrease the width
-    bounds_bags = [
-        (sum(x for x in cover[k].values()), k, v) for k, v in bags.items()]
-
-    bounds_bags.sort(reverse=True)
-
-    c_global_ub = 0
-    for b_ub, k, v in bounds_bags:
-        # Global upper bound cannot be improved by improving this bag, nothing can be done
-        if b_ub <= c_global_ub:
-            return
-
-        # Filter out only those edges that may cover the bag. Remove those that are subsumed
-        relevant_edges = []
-        for e, ed in instance.hg.edges().items():
-            intersect = set(ed) & v
-            if len(intersect) > 0:
-                found = False
-                for ce, ced in relevant_edges:
-                    if intersect.issubset(ced):
-                        found = True
-                        break
-                    if intersect.issuperset(ced):
-                        ced.update(intersect)
-                        found = True
-                        break
-
-                if not found:
-                    relevant_edges.append((e, intersect))
-
-        # Start recursive call
-        res = bandb_sub(v, relevant_edges, b_ub)
-
-        # Apply new cover if better
-        if res[0] < b_ub:
-            cover[k] = {e: 1 for e in res[1]}
-
-        # This is valid due to the sort order
-        c_global_ub = min(res[0], b_ub)
-
-
 def bandb_sub(b, edges, ub):
         """Recursive function that computes the cover. Use pos=-1 and value False for call. Returns maxsize of no better
         solution could be found."""
@@ -292,3 +249,49 @@ def bandb_sub(b, edges, ub):
         if best < ub:
             return best, best_list
         return maxsize, None
+
+
+def bandb(instance, bags, cover, subcall=bandb_sub):
+    """Tries to improve a given cover, by computing the optimal cover via branch and bound"""
+
+    # Not execute the B&B for every bag. First calculate the width and process in reverse order
+    # Using this ordering, we can stop whenever we cannot improve a bag, as subsequent improvement will not
+    # decrease the width
+    bounds_bags = [
+        (sum(x for x in cover[k].values()), k, v) for k, v in bags.items()]
+
+    bounds_bags.sort(reverse=True)
+
+    c_global_ub = 0
+    for b_ub, k, v in bounds_bags:
+        # Global upper bound cannot be improved by improving this bag, nothing can be done
+        if b_ub <= c_global_ub:
+            return
+
+        # Filter out only those edges that may cover the bag. Remove those that are subsumed
+        relevant_edges = []
+        for e, ed in instance.hg.edges().items():
+            intersect = set(ed) & v
+            if len(intersect) > 0:
+                found = False
+                for ce, ced in relevant_edges:
+                    if intersect.issubset(ced):
+                        found = True
+                        break
+                    if intersect.issuperset(ced):
+                        ced.update(intersect)
+                        found = True
+                        break
+
+                if not found:
+                    relevant_edges.append((e, intersect))
+
+        # Start recursive call
+        res = subcall(v, relevant_edges, b_ub)
+
+        # Apply new cover if better
+        if res[0] < b_ub:
+            cover[k] = {e: 1 for e in res[1]}
+
+        # This is valid due to the sort order
+        c_global_ub = min(res[0], b_ub)
