@@ -14,7 +14,7 @@ class CHtwEncoding:
         # We know c to be smaller than m, help the solver
         if use_c:
             self.stream.write(f"(declare-const c Int)\n")
-            self.stream.write(f"(assert (>= c 1))\n")
+            self.stream.write(f"(assert (>= c 0))\n")
             self.stream.write(f"(assert (<= c m))\n")
 
             # Add cardinality constraints

@@ -248,24 +248,24 @@ def bandb_sub(b, edges, ub):
         # Return result if better has been found, otherwise return default value
         if best < ub:
             return best, best_list
-        return maxsize, None
+        return None
 
 
-def bandb(instance, bags, cover, subcall=bandb_sub):
+def bandb(instance, bags, cover, subcall=bandb_sub, boundcall=lambda e, v: sum(x for x in v.values())):
     """Tries to improve a given cover, by computing the optimal cover via branch and bound"""
 
     # Not execute the B&B for every bag. First calculate the width and process in reverse order
     # Using this ordering, we can stop whenever we cannot improve a bag, as subsequent improvement will not
     # decrease the width
     bounds_bags = [
-        (sum(x for x in cover[k].values()), k, v) for k, v in bags.items()]
+        (boundcall(k, cover[k]), k, v) for k, v in bags.items()]
 
     bounds_bags.sort(reverse=True)
 
-    c_global_ub = 0
+    c_global_ub = None
     for b_ub, k, v in bounds_bags:
         # Global upper bound cannot be improved by improving this bag, nothing can be done
-        if b_ub <= c_global_ub:
+        if c_global_ub is not None and b_ub <= c_global_ub:
             return
 
         # Filter out only those edges that may cover the bag. Remove those that are subsumed
@@ -290,8 +290,10 @@ def bandb(instance, bags, cover, subcall=bandb_sub):
         res = subcall(v, relevant_edges, b_ub)
 
         # Apply new cover if better
-        if res[0] < b_ub:
+        if res:
             cover[k] = {e: 1 for e in res[1]}
 
-        # This is valid due to the sort order
-        c_global_ub = min(res[0], b_ub)
+            # This is valid due to the sort order
+            c_global_ub = min(res[0], b_ub)
+        else:
+            c_global_ub = b_ub
