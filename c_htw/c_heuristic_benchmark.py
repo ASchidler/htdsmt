@@ -54,10 +54,12 @@ for ratio in ratios:
     results['clast_b'] = (clast_b[0], clast_b[1])
 
     with open(result_file, "w+") as outp:
+        outp = sys.stdout
         names = list(results.keys())
         names.sort()
         # minimum found width and minimum found c
         outp.write(f"{min(v[0] for v in results.values())};{min(v[1] for v in results.values())}")
         for n in names:
             outp.write(f";{results[n][0]};{results[n][1]}")
+        outp.write(os.linesep)
 

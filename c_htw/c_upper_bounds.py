@@ -13,7 +13,11 @@ def greedy(instance, bb=True, cfirst=True):
             ed = instance.hg.get_edge(e)
             if v in ed:
                 cnt += 1
-        vertex_rank[v] = cnt
+        cnt2 = 0
+        for e, ed in instance.hg.edges().items():
+            if v in ed:
+                cnt2 += 1
+        vertex_rank[v] = 1.0 * cnt / cnt2
 
     ordering = ub.compute_ordering(instance, criteria=lambda i, g: min((len(g[x]), sum(vertex_rank[n] for n in g[x]), x)
                                                                        for x in g.nodes)[2])
@@ -26,7 +30,15 @@ def greedy(instance, bb=True, cfirst=True):
 
     c = max(sum(v for e, v in entries.items() if v > 0 and e in instance.c_edges) for entries in edge_cover.values())
     if bb:
-        ub.bandb(instance, bags, edge_cover, subcall=lambda b, edges, cub: bandb_sub(instance, b, edges, cub, c, cfirst))
+        def bndf(nl, vl):
+            """Calculates the bounds for a bag, used for branch and bound"""
+            wl = sum(x for x in vl.values())
+            cl = sum(x for el, x in vl.items() if x > 0 and el in instance.c_edges)
+            return wl, cl
+
+        ub.bandb(instance, bags, edge_cover, subcall=lambda b, edges, cub: bandb_sub(instance, b, edges, cub, cfirst),
+                 boundcall=bndf)
+
         c = max(
             sum(v for e, v in entries.items() if v > 0 and e in instance.c_edges) for entries in edge_cover.values())
 
@@ -75,12 +87,13 @@ def cover_ghtd(instance, bags):
     return edge_cover
 
 
-def bandb_sub(instance, b, edges, ub_w, ub_c, cfirst=True):
+def bandb_sub(instance, b, edges, ub, cfirst=True):
     """Recursive function that computes the cover. Use pos=-1 and value False for call. Returns maxsize of no better
     solution could be found."""
 
     q = [(b, 0, 0, -1, False, [])]
 
+    ub_w, ub_c = ub
     best_c = ub_c
     best_w = ub_w
     best_list = None
@@ -128,4 +141,4 @@ def bandb_sub(instance, b, edges, ub_w, ub_c, cfirst=True):
     if best_w < ub_w or best_c < ub_c:
         return best_w, best_list
 
-    return maxsize, None
+    return None
