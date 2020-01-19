@@ -4,15 +4,15 @@ from sys import maxsize
 from random import randint
 
 
-def compute_ordering(pg):
+def compute_ordering(instance, criteria=lambda i, g: min((len(g[x]), x) for x in g.nodes)[1]):
     # Build elimination ordering
     ordering = []
-    g = pg.copy()
+    g = instance.pg.copy()
 
-    while len(ordering) < len(pg.nodes):
+    while len(ordering) < len(instance.pg.nodes):
         # Min Degree with random tiebreaker, tiebreak leads no irreproducibility
         # _, _, n = min((len(pv[x]), randint(0, 100), x) for x in pv.nodes)
-        _, n = min((len(g[x]), x) for x in g.nodes)
+        n = criteria(instance, g)
         ordering.append(n)
         nb = g[n]
         for u in nb:
@@ -25,27 +25,22 @@ def compute_ordering(pg):
     return ordering
 
 
-def greedy(g, htd, bb=True):
+def greedy(instance, htd, bb=True):
     # Build primal graph
-    pg = Graph()
-    for e in g.edges():
-        for u, v in combinations(g.get_edge(e), 2):
-            pg.add_edge(u, v)
-
-    ordering = compute_ordering(pg)
-    bags, tree, root = ordering_to_decomp(pg, ordering)
-    improve_scramble(pg, ordering, bound=max(len(b)-2 for b in bags.values()))
+    ordering = compute_ordering(instance)
+    bags, tree, root = ordering_to_decomp(instance, ordering)
+    improve_scramble(instance, ordering, bound=max(len(b)-2 for b in bags.values()))
 
     # In case of HTD we require to not violate the special condition
     simplify_decomp(bags, tree)
     if htd:
-        edge_cover = cover_htd(g, bags, tree, root)
+        edge_cover = cover_htd(instance, bags, tree, root)
     else:
-        edge_cover = cover_ghtd(g, bags)
+        edge_cover = cover_ghtd(instance, bags)
         if bb:
-            bandb(g, bags, edge_cover)
+            bandb(instance, bags, edge_cover)
 
-    return max(sum(v.values()) for v in edge_cover.values())
+    return max(sum(v.values()) for v in edge_cover.values()), (tree, bags, edge_cover)
 
 
 def improve_scramble(g, ordering, rounds=100, bound=maxsize, interval=15):
@@ -74,14 +69,14 @@ def improve_scramble(g, ordering, rounds=100, bound=maxsize, interval=15):
     return bound
 
 
-def ordering_to_decomp(pg, ordering):
+def ordering_to_decomp(instance, ordering):
     """Converts an elimination ordering into a decomposition"""
 
     tree = DiGraph()
     ps = {x: ordering.index(x) for x in ordering}
     bags = {n: {n} for n in ordering}
 
-    for u, v in pg.edges:
+    for u, v in instance.pg.edges:
         if ps[v] < ps[u]:
             u, v = v, u
         bags[u].add(v)
@@ -98,6 +93,8 @@ def ordering_to_decomp(pg, ordering):
     return bags, tree, ordering[-1]
 
 
+# TODO: Move this to some utility class
+# TODO: Take care not to violate the special condition in case of HTD
 def simplify_decomp(bags, tree):
     """Simplifies the decomposition by eliminating subsumed bags. This usually results in fewer bags."""
     # Eliminate subsumed bags
@@ -129,23 +126,32 @@ def simplify_decomp(bags, tree):
                     break
 
 
-def cover_ghtd(g, bags):
-    edge_cover = {n: {e: 0 for e in g.edges().keys()} for n in g.nodes()}
+def cover_ghtd(instance, bags):
+    edge_cover = {n: {e: 0 for e in instance.hg.edges().keys()} for n in instance.hg.nodes()}
+    vertex_rank = {}
+
+    for v in instance.hg.nodes():
+        cnt = 0
+        for e, ed in instance.hg.edges().items():
+            if v in ed:
+                cnt += 1
+        vertex_rank[v] = cnt
 
     for k, v in bags.items():
         remaining = set(v)
 
         # cover bag, minimize cost per covered vertex
         while len(remaining) > 0:
-            c_best = (0.0, None, None)
-            for e, ed in g.edges().items():
-                ed = set(ed)
+            c_best = (0, None, None, maxsize)
+            for e, ed in instance.hg.edges().items():
+                intersect_vertices = set(ed) & remaining
+                intersect = len(intersect_vertices)
+                rank = sum(vertex_rank[v] for v in intersect_vertices)
 
-                intersect = len(remaining & ed)
-                if intersect > c_best[0]:
-                    c_best = (intersect, e, ed)
+                if intersect > c_best[0] or (intersect == c_best[0] and rank < c_best[3]):
+                    c_best = (intersect, e, intersect_vertices, rank)
 
-            _, e, ed = c_best
+            _, e, ed, _ = c_best
             remaining -= ed
             edge_cover[k][e] = 1
 
@@ -194,56 +200,8 @@ def cover_htd(g, bags, tree, root):
     return edge_cover
 
 
-def bandb(g, bags, cover):
+def bandb(instance, bags, cover):
     """Tries to improve a given cover, by computing the optimal cover via branch and bound"""
-
-    w = g.weights() if g.weights else None
-
-    def bb_rec(b, edges, c, pos, val, ub):
-        """Recursive function that computes the cover. Use pos=-1 and value False for call. Returns maxsize of no better
-        solution could be found."""
-
-        # Reached the end, but did not fill the bag...
-        if pos == len(edges):
-            return maxsize, None
-
-        nb = b
-        nc = c
-
-        # If we should add the edge, add costs and remove from bag
-        if val:
-            e, ed = edges[pos]
-
-            # Hyperedge does not contribute anything, adding it cannot be optimal
-            if len(ed & b) == 0:
-                return maxsize, None
-
-            nc = c + w[e] if w else c + 1
-
-            # Exceed upper bound -> suboptimal
-            if nc >= ub:
-                return maxsize, None
-
-            nb = b - ed
-            # Found a solution, that is cheaper, return
-            if len(nb) == 0:
-                return nc, [e]
-
-        # Subcalls
-        res1 = bb_rec(nb, edges, nc, pos + 1, True, ub)
-        res2 = bb_rec(nb, edges, nc, pos + 1, False, min(ub, res1[0]))
-
-        # Retain the minimal found solution and return it, if it is an improvement
-        res = min(res1, res2)
-
-        if res[0] < ub:
-            if val:
-                res[1].append(edges[pos][0])
-
-            return res
-
-        # Default return in case the solution is not an improvement
-        return maxsize, None
 
     # Not execute the B&B for every bag. First calculate the width and process in reverse order
     # Using this ordering, we can stop whenever we cannot improve a bag, as subsequent improvement will not
@@ -259,17 +217,78 @@ def bandb(g, bags, cover):
         if b_ub <= c_global_ub:
             return
 
-        # Filter out only those edges that may cover the bag. This may be inefficient...
-        relevant_edges = [(e, set(ed) & v) for e, ed in g.edges().items() if len(set(ed) & v) > 0]
+        # Filter out only those edges that may cover the bag. Remove those that are subsumed
+        relevant_edges = []
+        for e, ed in instance.hg.edges().items():
+            intersect = set(ed) & v
+            if len(intersect) > 0:
+                found = False
+                for ce, ced in relevant_edges:
+                    if intersect.issubset(ced):
+                        found = True
+                        break
+                    if intersect.issuperset(ced):
+                        ced.update(intersect)
+                        found = True
+                        break
+
+                if not found:
+                    relevant_edges.append((e, intersect))
+
         # Start recursive call
-        res = bb_rec(v, relevant_edges, 0, -1, False, b_ub)
+        res = bandb_sub(v, relevant_edges, b_ub)
 
         # Apply new cover if better
         if res[0] < b_ub:
-            if w:
-                cover[k] = {e: w[e] for e in res[1]}
-            else:
-                cover[k] = {e: 1 for e in res[1]}
+            cover[k] = {e: 1 for e in res[1]}
 
         # This is valid due to the sort order
         c_global_ub = min(res[0], b_ub)
+
+
+def bandb_sub(b, edges, ub):
+        """Recursive function that computes the cover. Use pos=-1 and value False for call. Returns maxsize of no better
+        solution could be found."""
+        q = [(b, 0, -1, False, [])]
+        best = ub
+        best_list = None
+
+        while q:
+            b, c, pos, val, e_list = q.pop()
+
+            # Reached the end, but did not fill the bag, ignore solution
+            if pos == len(edges):
+                continue
+
+            # If we should add the edge, add costs and remove from bag
+            if val:
+                e, ed = edges[pos]
+
+                # Hyperedge does not contribute anything, adding it cannot be optimal
+                if len(ed & b) == 0:
+                    continue
+
+                c = c + 1
+
+                # Exceed upper bound -> suboptimal
+                if c >= best:
+                    continue
+
+                b = b - ed
+                # Copy list and add edge
+                e_list = list(e_list)
+                e_list.append(e)
+
+                # Found a solution, store (we already know it's better than best from above)
+                if len(b) == 0:
+                    best = c
+                    best_list = e_list
+
+            # "Subcalls"
+            q.append((b, c, pos + 1, False, e_list))
+            q.append((b, c, pos + 1, True, e_list))
+
+        # Return result if better has been found, otherwise return default value
+        if best < ub:
+            return best, best_list
+        return maxsize, None
