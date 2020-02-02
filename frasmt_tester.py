@@ -14,12 +14,12 @@ logging.disable(logging.FATAL)
 base_output_path = '/tmp'
 base_output_file = 'slv'
 
-for i in range(17, 200, 2):
+for i in range(15, 200, 2):
     if i == 18 or i == 20:
         continue
 
     sys.stdout.write("Instance {}\n".format(i))
-    file = "/home/aschidler/Downloads/htd-exact-public/htd-exact_{:03d}.hgr".format(i)
+    file = "/home/andre/Downloads/htd-exact-public/htd-exact_{:03d}.hgr".format(i)
 
     arcs = None
     ord = None
@@ -28,7 +28,7 @@ for i in range(17, 200, 2):
     bags = None
     res = None
 
-    for htd in [False, None, True]:
+    for htd in [False, True]:
         # Create encoding of the instance
         before_tm = time.time()
 
@@ -40,7 +40,7 @@ for i in range(17, 200, 2):
             # bad to compare
             lb = None if res is None else res.size
 
-            res = solver.solve(base_output_path, base_output_file, file, htd=htd, sb=htd, timeout=900, lb=lb)
+            res = solver.solve(base_output_path, base_output_file, file, htd=htd, sb=False, timeout=900, lb=None)
             if htd is None:
                 htd = True
 

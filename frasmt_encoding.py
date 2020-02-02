@@ -478,60 +478,79 @@ class FraSmtSolver:
 
         # # Whenever a tree node covers an edge, it covers all of the edge's vertices
         for i in range(1, n+1):
-            for j in range(1, n + 1):
-                self.stream.write("(declare-const subset_{}_{} Bool)\n".format(i, j))
+            for j in range(i, n + 1):
+                # We need forbidden_i_i
                 self.stream.write("(declare-const is_forbidden_{}_{} Bool)\n".format(i, j))
+                if j > i:
+                    self.stream.write("(declare-const subset_{}_{} Bool)\n".format(i, j))
 
         for i in range(1, n+1):
-            for j in range(1, n + 1):
-                if i == j:
-                    continue
+            for j in range(i+1, n + 1):
                 self.stream.write(
-                    "(assert (=> (not arc_{i}_{j}) (not subset_{j}_{i})))\n".format(i=i, j=j))
+                    "(assert (=> (and ord_{i}_{j} (not arc_{i}_{j})) (not subset_{i}_{j})))\n".format(i=i, j=j))
+                self.stream.write(
+                    "(assert (=> (and (not ord_{i}_{j}) (not arc_{j}_{i})) (not subset_{i}_{j})))\n".format(i=i, j=j))
 
+                # Ensure identical covers
                 for e in self.hypergraph.edges():
                     # = 1 is superior to > 0
                     self.stream.write("(assert (=> (and (= weight_{i}_e{e} 0) (= weight_{j}_e{e} 1)) "
+                                      "(not subset_{i}_{j})))\n".format(i=i, j=j, e=e))
+                    self.stream.write("(assert (=> (and (= weight_{i}_e{e} 1) (= weight_{j}_e{e} 0)) "
                                       "(not subset_{i}_{j})))\n".format(i=i, j=j, e=e))
 
                 for k in range(1, n + 1):
                     if k == i or k == j:
                         continue
+                    # Ensure identical bags
                     self.stream.write("(assert (=> (and arc_{i}_{k} (not arc_{j}_{k})) (not subset_{i}_{j})))\n"
                                       .format(i=i, j=j, k=k))
-                    # Keeping these two clauses separate is faster than uniting them
-                    self.stream.write("(assert (=> (and (not subset_{j}_{i}) arc_{i}_{j} arc_{j}_{k}) "
-                                      "(not subset_{k}_{i})))\n"
+                    self.stream.write("(assert (=> (and (not arc_{i}_{k}) arc_{j}_{k}) (not subset_{i}_{j})))\n"
                                       .format(i=i, j=j, k=k))
-                    self.stream.write("(assert (=> (and (not subset_{k}_{j}) arc_{i}_{j} arc_{j}_{k}) "
-                                      "(not subset_{k}_{i})))\n"
-                                      .format(i=i, j=j, k=k))
+
+        def tss(ni, nj):
+            return "subset_{}_{}".format(nj, ni) if ni > nj else "subset_{}_{}".format(ni, nj)
+
+        def tord(ix, jx):
+            return 'ord_{}_{}'.format(ix, jx) if ix < jx else '(not ord_{}_{})'.format(jx, ix)
+
+        def tf(ni, nj):
+            return "is_forbidden_{}_{}".format(nj, ni) if ni > nj else "is_forbidden_{}_{}".format(ni, nj)
+
+        for i in range(1, n+1):
+            for j in range(i+1, n + 1):
+                if i == j:
+                    continue
+                for k in range(1, n + 1):
+                    if k == i or k == j:
+                        continue
+
+                    self.stream.write(f"(assert (=> (and (not {tss(j,i)}) arc_{i}_{j} arc_{j}_{k}) "
+                                      f"(not {tss(i, k)})))\n")
+                    self.stream.write(f"(assert (=> (and (not {tss(k,j)}) arc_{i}_{j} arc_{j}_{k}) "
+                                      f"(not {tss(i, k)})))\n")
 
         for i in range(1, n + 1):
             self.stream.write(
                 "(assert (not is_forbidden_{i}_{i}))\n".format(i=i))
 
-            for j in range(i + 1, n + 1):
+            for j in range(1, n + 1):
+                if i == j:
+                    continue
+
                 ivars = []
                 for e in self.hypergraph.incident_edges(i):
                     ivars.append("weight_{j}_e{e}".format(j=j, e=e))
-                jvars = []
-                for e in self.hypergraph.incident_edges(j):
-                    jvars.append("weight_{i}_e{e}".format(i=i, e=e))
 
                 jcoversi = ivars[0] if len(ivars) == 1 else "(+ {})".format(" ".join(ivars))
-                icoversj = jvars[0] if len(jvars) == 1 else "(+ {})".format(" ".join(jvars))
 
                 self.stream.write(
-                    "(assert (=> (and ord_{i}_{j} (> {covers} 0) (not subset_{j}_{i})) is_forbidden_{j}_{i}))\n"
-                        .format(i=i, j=j, covers=jcoversi))
-                self.stream.write(
-                    "(assert (=> (and (not ord_{i}_{j}) (> {covers} 0) (not subset_{i}_{j})) is_forbidden_{i}_{j}))\n"
-                        .format(i=i, j=j, covers=icoversj))
+                    f"(assert (=> (and {tord(i, j)} (> {jcoversi} 0) (not subset_{i}_{j})) is_forbidden_{i}_{j}))\n")
 
                 for k in range(1, n + 1):
-                    self.stream.write(
-                        "(assert (=> (and arc_{i}_{j} is_forbidden_{j}_{k}) is_forbidden_{i}_{k})))\n".format(i=i, j=j, k=k))
-                    self.stream.write(
-                        "(assert (=> (and arc_{j}_{i} is_forbidden_{i}_{k}) is_forbidden_{j}_{k})))\n".format(i=i, j=j,
-                                                                                                              k=k))
+                    if i != k:
+                        self.stream.write(
+                            f"(assert (=> (and arc_{i}_{j} {tf(j, k)} {tord(i, k)}) {tf(k, i)}))\n")
+                    else:
+                        self.stream.write(
+                            f"(assert (=> (and arc_{i}_{j} {tf(j, k)}) {tf(k, i)}))\n")
