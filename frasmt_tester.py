@@ -19,7 +19,7 @@ for i in range(15, 200, 2):
         continue
 
     sys.stdout.write("Instance {}\n".format(i))
-    file = "/home/andre/Downloads/htd-exact-public/htd-exact_{:03d}.hgr".format(i)
+    file = "/home/aschidler/Downloads/htd-exact-public/htd-exact_{:03d}.hgr".format(i)
 
     arcs = None
     ord = None
@@ -40,7 +40,7 @@ for i in range(15, 200, 2):
             # bad to compare
             lb = None if res is None else res.size
 
-            res = solver.solve(base_output_path, base_output_file, file, htd=htd, sb=False, timeout=900, lb=None)
+            res = solver.solve(base_output_path, base_output_file, file, htd=htd, sb=False, timeout=900, lb=None, heuristic_repair=False)
             if htd is None:
                 htd = True
 
