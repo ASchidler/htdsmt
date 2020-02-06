@@ -500,11 +500,14 @@ class FraSmtSolver:
                     f"(assert (=> (and {tord(i, j)} (not arc_{i}_{j})) (not {tss(i, j)})))\n")
 
                 # Ensure identical covers
-                if i < j:
-                    for e in self.hypergraph.edges():
-                        # = 1 is superior to > 0
-                        self.stream.write(f"(assert (=> (not (= weight_{i}_e{e} weight_{j}_e{e})) "
-                                          f"(not {tss(i, j)})))\n")
+                for e in self.hypergraph.edges():
+                    # This may seem better than the version below, and we would need it only for j > 1, but it is wayyyy slower
+                    # self.stream.write(f"(assert (=> (not (= weight_{i}_e{e} weight_{j}_e{e})) "
+                    #                   f"(not {tss(i, j)})))\n")
+
+                    # = 1 is superior to > 0
+                    self.stream.write(f"(assert (=> (and (= weight_{i}_e{e} 1) (= weight_{j}_e{e} 0)) "
+                                      f"(not {tss(i, j)})))\n")
 
                 for k in range(1, n + 1):
                     if k == i or k == j:
