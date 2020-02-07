@@ -173,10 +173,18 @@ class FraSmtSolver:
 
     def cover(self, n, weighted):
         # If a vertex j is in the bag, it must be covered:
-        # assert (=> arc_ij  (>= (+ weight_j_e2 weight_j_e5 weight_j_e7 ) 1) )
-        # TODO: double-check the iterator over i
-
         for i in range(1, n + 1):
+            # arc_ij then i most be covered by some edge (because i will end up in one bag)
+            weights = []
+            for e in self.hypergraph.incident_edges(i):
+                weights.append(f"weight_{i}_e{e}")
+
+            summed = f"(+ {' '.join(weights)})" if len(weights) > 1 else weights[0]
+            compared = f">= {summed} 1"
+
+            self.stream.write(
+                "(assert ({weights}))\n".format(i=i,  weights=compared))
+
             for j in range(1, n + 1):
                 if i == j:
                     continue
@@ -191,17 +199,6 @@ class FraSmtSolver:
 
                 self.stream.write(
                     "(assert (=> arc_{i}_{j} ({weights})))\n".format(i=i, j=j, weights=compared))
-
-            # arc_ij then i most be covered by some edge (because i will end up in one bag)
-            weights = []
-            for e in self.hypergraph.incident_edges(i):
-                weights.append("weight_{i}_e{e}".format(i=i, e=e))
-
-            summed = f"(+ {' '.join(weights)})" if len(weights) > 1 else weights[0]
-            compared = f">= {summed} 1" if not weighted else f">= {summed} 1"
-
-            self.stream.write(
-                "(assert ({weights}))\n".format(i=i, j=j, weights=compared))
 
     def break_clique(self, clique):
         if clique:
@@ -555,34 +552,50 @@ class FraSmtSolver:
                                       "(not subset_{k}_{i})))\n"
                                       .format(i=i, j=j, k=k))
 
+        for i in range(1, n+1):
+            for j in range(1, n+1):
+                if i == j:
+                    continue
+                self.stream.write(f"(assert (=> arc_{i}_{j} is_forbidden_{i}_{j}))\n")
+                for k in range(1, n + 1):
+                    if i == j or i == k:
+                        continue
+                    self.stream.write(f"(assert (=> (and is_forbidden_{i}_{j} is_forbidden_{j}_{k}) is_forbidden_{i}_{k}))\n")
+
         for i in range(1, n + 1):
             self.stream.write(
                 "(assert (not is_forbidden_{i}_{i}))\n".format(i=i))
 
-            for j in range(i + 1, n + 1):
-                ivars = []
-                for e in self.hypergraph.incident_edges(i):
-                    ivars.append("weight_{j}_e{e}".format(j=j, e=e))
-                jvars = []
-                for e in self.hypergraph.incident_edges(j):
-                    jvars.append("weight_{i}_e{e}".format(i=i, e=e))
+            for e in self.hypergraph.incident_edges(i):
+                for j in range(1, n + 1):# self.hypergraph.get_edge(e):
+                    if i != j:
+                        self.stream.write(f"(assert (=> (and is_forbidden_{i}_{j} (not subset_{j}_{i})) (= weight_{j}_e{e} 0)))\n")
 
-                jcoversi = ivars[0] if len(ivars) == 1 else "(+ {})".format(" ".join(ivars))
-                icoversj = jvars[0] if len(jvars) == 1 else "(+ {})".format(" ".join(jvars))
-                self.stream.write(
-                    "(assert (=> ord_{i}_{j} (not is_forbidden_{i}_{j})))\n".format(i=i, j=j))
-                self.stream.write(
-                    "(assert (=> (not ord_{i}_{j}) (not is_forbidden_{j}_{i})))\n".format(i=i, j=j))
-                self.stream.write(
-                    "(assert (=> (and ord_{i}_{j} (> {covers} 0) (not subset_{j}_{i})) is_forbidden_{j}_{i}))\n"
-                        .format(i=i, j=j, covers=jcoversi))
-                self.stream.write(
-                    "(assert (=> (and (not ord_{i}_{j}) (> {covers} 0) (not subset_{i}_{j})) is_forbidden_{i}_{j}))\n"
-                        .format(i=i, j=j, covers=icoversj))
-
-                for k in range(1, n + 1):
-                    self.stream.write(
-                        "(assert (=> (and arc_{i}_{j} is_forbidden_{j}_{k}) is_forbidden_{i}_{k})))\n".format(i=i, j=j, k=k))
-                    self.stream.write(
-                        "(assert (=> (and arc_{j}_{i} is_forbidden_{i}_{k}) is_forbidden_{j}_{k})))\n".format(i=i, j=j,
-                                                                                                              k=k))
+            # for j in range(i + 1, n + 1):
+            #
+            #     ivars = []
+            #     for e in self.hypergraph.incident_edges(i):
+            #         ivars.append("weight_{j}_e{e}".format(j=j, e=e))
+            #     jvars = []
+            #     for e in self.hypergraph.incident_edges(j):
+            #         jvars.append("weight_{i}_e{e}".format(i=i, e=e))
+            #
+            #     jcoversi = ivars[0] if len(ivars) == 1 else "(+ {})".format(" ".join(ivars))
+            #     icoversj = jvars[0] if len(jvars) == 1 else "(+ {})".format(" ".join(jvars))
+            #     self.stream.write(
+            #         "(assert (=> ord_{i}_{j} (not is_forbidden_{i}_{j})))\n".format(i=i, j=j))
+            #     self.stream.write(
+            #         "(assert (=> (not ord_{i}_{j}) (not is_forbidden_{j}_{i})))\n".format(i=i, j=j))
+            #     self.stream.write(
+            #         "(assert (=> (and ord_{i}_{j} (> {covers} 0) (not subset_{j}_{i})) is_forbidden_{j}_{i}))\n"
+            #             .format(i=i, j=j, covers=jcoversi))
+            #     self.stream.write(
+            #         "(assert (=> (and (not ord_{i}_{j}) (> {covers} 0) (not subset_{i}_{j})) is_forbidden_{i}_{j}))\n"
+            #             .format(i=i, j=j, covers=icoversj))
+            #
+            #     for k in range(1, n + 1):
+            #         self.stream.write(
+            #             "(assert (=> (and arc_{i}_{j} is_forbidden_{j}_{k}) is_forbidden_{i}_{k})))\n".format(i=i, j=j, k=k))
+            #         self.stream.write(
+            #             "(assert (=> (and arc_{j}_{i} is_forbidden_{i}_{k}) is_forbidden_{j}_{k})))\n".format(i=i, j=j,
+            #                                                                                                   k=k))
