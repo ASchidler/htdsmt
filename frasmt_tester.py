@@ -12,7 +12,7 @@ logging.disable(logging.FATAL)
 
 # Path and naming scheme for output files
 base_output_path = '/tmp'
-base_output_file = 'slv'
+base_output_file = 'slv3'
 
 for i in range(17, 200, 2):
     if i == 18 or i == 20:
@@ -28,7 +28,7 @@ for i in range(17, 200, 2):
     bags = None
     res = None
 
-    for htd in [False, None, True]:
+    for htd in [False, True]:
         # Create encoding of the instance
         before_tm = time.time()
 
@@ -40,7 +40,7 @@ for i in range(17, 200, 2):
             # bad to compare
             lb = None if res is None else res.size
 
-            res = solver.solve(base_output_path, base_output_file, file, htd=htd, sb=htd, timeout=900, lb=lb)
+            res = solver.solve(base_output_path, base_output_file, file, htd=htd, sb=False, timeout=900, lb=None, heuristic_repair=False)
             if htd is None:
                 htd = True
 

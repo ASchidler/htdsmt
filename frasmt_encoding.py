@@ -532,8 +532,10 @@ class FraSmtSolver:
             for j in range(1, n + 1):
                 if i == j:
                     continue
-                self.stream.write(
-                    "(assert (=> (not arc_{i}_{j}) (not subset_{j}_{i})))\n".format(i=i, j=j))
+                self.stream.write(f"(assert (=> (not arc_{i}_{j}) (not subset_{j}_{i})))\n")
+                if i < j:
+                    self.stream.write(f"(assert (=> ord_{i}_{j} (not subset_{i}_{j})))\n")
+                    self.stream.write(f"(assert (=> (not ord_{i}_{j}) (not subset_{j}_{i})))\n")
 
                 for e in self.hypergraph.edges():
                     # = 1 is superior to > 0
@@ -567,7 +569,10 @@ class FraSmtSolver:
 
                 jcoversi = ivars[0] if len(ivars) == 1 else "(+ {})".format(" ".join(ivars))
                 icoversj = jvars[0] if len(jvars) == 1 else "(+ {})".format(" ".join(jvars))
-
+                self.stream.write(
+                    "(assert (=> ord_{i}_{j} (not is_forbidden_{i}_{j})))\n".format(i=i, j=j))
+                self.stream.write(
+                    "(assert (=> (not ord_{i}_{j}) (not is_forbidden_{j}_{i})))\n".format(i=i, j=j))
                 self.stream.write(
                     "(assert (=> (and ord_{i}_{j} (> {covers} 0) (not subset_{j}_{i})) is_forbidden_{j}_{i}))\n"
                         .format(i=i, j=j, covers=jcoversi))
