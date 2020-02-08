@@ -116,13 +116,13 @@ class FraSmtSolver:
             else '(not ord_{q}_{p})'.format(p=p, q=q)
 
         # Some improvements
-        for i in range(1, n + 1):
-            for j in range(i+1, n + 1):
-                # Arcs cannot go in both directions
-                self.add_clause([-self.arc[j][i], -self.arc[i][j]])
-                # Enforce arc direction from smaller to bigger ordered vertex
-                self.add_clause([-self.ord[i][j], -self.arc[j][i]])
-                self.add_clause([self.ord[i][j], -self.arc[i][j]])
+        # for i in range(1, n + 1):
+        #     for j in range(i+1, n + 1):
+        #         # Arcs cannot go in both directions
+        #         self.add_clause([-self.arc[j][i], -self.arc[i][j]])
+        #         # Enforce arc direction from smaller to bigger ordered vertex
+        #         self.add_clause([-self.ord[i][j], -self.arc[j][i]])
+        #         self.add_clause([self.ord[i][j], -self.arc[i][j]])
 
         for i in range(1, n + 1):
             for j in range(1, n + 1):
@@ -523,7 +523,7 @@ class FraSmtSolver:
         for i in range(1, n+1):
             for j in range(1, n + 1):
                 self.stream.write("(declare-const subset_{}_{} Bool)\n".format(i, j))
-                self.stream.write("(declare-const is_forbidden_{}_{} Bool)\n".format(i, j))
+                #self.stream.write("(declare-const is_forbidden_{}_{} Bool)\n".format(i, j))
 
         for i in range(1, n+1):
             for j in range(1, n + 1):
@@ -552,50 +552,31 @@ class FraSmtSolver:
                                       "(not subset_{k}_{i})))\n"
                                       .format(i=i, j=j, k=k))
 
-        for i in range(1, n+1):
+
+        for i in range(1, n + 1):
+            incident_node = set()
+            for e in self.hypergraph.incident_edges(i):
+                incident_node.update(self.hypergraph.get_edge(e))
+
+            incident_node.remove(i)
+
+            for e in self.hypergraph.incident_edges(i):
+                for j in self.hypergraph.get_edge(e):
+                    if i == j:
+                        continue
+                    for k in range(1, n + 1):
+                        if i == k or j == k:
+                            continue
+                        if k not in incident_node:
+                            if i < k:
+                                self.stream.write(f"(assert (=> (and ord_{i}_{k} arc_{k}_{j}) (not subset_{} (= weight_{k}_e{e} 0)))\n")
+                            else:
+                                self.stream.write(
+                                    f"(assert (=> (and (not ord_{k}_{i}) arc_{k}_{j}) (= weight_{k}_e{e} 0)))\n")
+
             for j in range(1, n+1):
                 if i == j:
                     continue
-                self.stream.write(f"(assert (=> arc_{i}_{j} is_forbidden_{i}_{j}))\n")
-                for k in range(1, n + 1):
-                    if i == j or i == k:
-                        continue
-                    self.stream.write(f"(assert (=> (and is_forbidden_{i}_{j} is_forbidden_{j}_{k}) is_forbidden_{i}_{k}))\n")
 
-        for i in range(1, n + 1):
-            self.stream.write(
-                "(assert (not is_forbidden_{i}_{i}))\n".format(i=i))
-
-            for e in self.hypergraph.incident_edges(i):
-                for j in range(1, n + 1):# self.hypergraph.get_edge(e):
-                    if i != j:
-                        self.stream.write(f"(assert (=> (and is_forbidden_{i}_{j} (not subset_{j}_{i})) (= weight_{j}_e{e} 0)))\n")
-
-            # for j in range(i + 1, n + 1):
-            #
-            #     ivars = []
-            #     for e in self.hypergraph.incident_edges(i):
-            #         ivars.append("weight_{j}_e{e}".format(j=j, e=e))
-            #     jvars = []
-            #     for e in self.hypergraph.incident_edges(j):
-            #         jvars.append("weight_{i}_e{e}".format(i=i, e=e))
-            #
-            #     jcoversi = ivars[0] if len(ivars) == 1 else "(+ {})".format(" ".join(ivars))
-            #     icoversj = jvars[0] if len(jvars) == 1 else "(+ {})".format(" ".join(jvars))
-            #     self.stream.write(
-            #         "(assert (=> ord_{i}_{j} (not is_forbidden_{i}_{j})))\n".format(i=i, j=j))
-            #     self.stream.write(
-            #         "(assert (=> (not ord_{i}_{j}) (not is_forbidden_{j}_{i})))\n".format(i=i, j=j))
-            #     self.stream.write(
-            #         "(assert (=> (and ord_{i}_{j} (> {covers} 0) (not subset_{j}_{i})) is_forbidden_{j}_{i}))\n"
-            #             .format(i=i, j=j, covers=jcoversi))
-            #     self.stream.write(
-            #         "(assert (=> (and (not ord_{i}_{j}) (> {covers} 0) (not subset_{i}_{j})) is_forbidden_{i}_{j}))\n"
-            #             .format(i=i, j=j, covers=icoversj))
-            #
-            #     for k in range(1, n + 1):
-            #         self.stream.write(
-            #             "(assert (=> (and arc_{i}_{j} is_forbidden_{j}_{k}) is_forbidden_{i}_{k})))\n".format(i=i, j=j, k=k))
-            #         self.stream.write(
-            #             "(assert (=> (and arc_{j}_{i} is_forbidden_{i}_{k}) is_forbidden_{j}_{k})))\n".format(i=i, j=j,
-            #                                                                                                   k=k))
+                for e in self.hypergraph.incident_edges(i):
+                    self.stream.write(f"(assert (=> (and arc_{i}_{j} (not subset_{j}_{i})) (= weight_{j}_e{e} 0)))\n")
