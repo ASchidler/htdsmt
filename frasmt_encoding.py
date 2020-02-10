@@ -537,6 +537,7 @@ class FraSmtSolver:
             for j in range(1, n + 1):
                 if i == j:
                     continue
+                #if j not in incident:
                 self.stream.write("(declare-const forbidden_{}_{} Bool)\n".format(i, j))
 
         for i in range(1, n + 1):
@@ -549,23 +550,18 @@ class FraSmtSolver:
                 if i == j:
                     continue
 
-                self.stream.write(f"(assert (=> (and arc_{i}_{j}) forbidden_{i}_{j}))\n")
-                # for k in range(1, n + 1):
-                #     if i == k or j == k:
-                #         continue
-                #
-                #     self.stream.write(f"(assert (=> (and forbidden_{i}_{j} arc_{j}_{k}) forbidden_{i}_{k})))\n")
-                for k in range(1, n + 1):
-                    if j == k or i == k:
-                        continue
-                    if k < j:
-                        self.stream.write(f"(assert (=> (and arc_{i}_{k} ord_{k}_{j}) forbidden_{i}_{j})))\n")
-                    else:
-                        self.stream.write(f"(assert (=> (and arc_{i}_{k} (not ord_{j}_{k})) forbidden_{i}_{j})))\n")
+                if j not in incident:
+                    self.stream.write(f"(assert (=> arc_{i}_{j} forbidden_{i}_{j}))\n")
+                    for k in range(1, n + 1):
+                        if j == k or i == k:
+                            continue
 
-                if j in incident:
-                    for e in self.hypergraph.incident_edges(i):
-                        self.stream.write(f"(assert (=> (and arc_{i}_{j} (not subset_{j}_{i})) (= weight_{j}_e{e} 0)))\n")
+                        if k < j:
+                            self.stream.write(f"(assert (=> (and arc_{i}_{k} ord_{k}_{j}) forbidden_{i}_{j})))\n")
+                        else:
+                            self.stream.write(f"(assert (=> (and arc_{i}_{k} (not ord_{j}_{k})) forbidden_{i}_{j})))\n")
                 else:
-                    for e in self.hypergraph.incident_edges(i):
-                        self.stream.write(f"(assert (=> forbidden_{i}_{j} (= weight_{j}_e{e} 0)))\n")
+                    self.stream.write(f"(assert (=> (and arc_{i}_{j} (not subset_{j}_{i})) forbidden_{i}_{j}))\n")
+
+                for e in self.hypergraph.incident_edges(i):
+                    self.stream.write(f"(assert (=> forbidden_{i}_{j} (= weight_{j}_e{e} 0)))\n")
