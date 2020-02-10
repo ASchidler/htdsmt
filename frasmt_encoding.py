@@ -516,8 +516,9 @@ class FraSmtSolver:
 
                 for e in self.hypergraph.edges():
                     # = 1 is superior to > 0. Keeping these two clauses separate is faster than (= w1 w2)
-                    self.stream.write(f"(assert (=> (and subset_{i}_{j} (= weight_{i}_e{e} 0)) (= weight_{j}_e{e} 0)))\n")
-                    self.stream.write(f"(assert (=> (and subset_{i}_{j} (= weight_{i}_e{e} 1)) (= weight_{j}_e{e} 1)))\n")
+                    # The first clause follows by optimality... Grants a great speedup...
+                    # self.stream.write(f"(assert (=> (and subset_{i}_{j} (= weight_{j}_e{e} 0)) (= weight_{i}_e{e} 0)))\n")
+                    self.stream.write(f"(assert (=> (and subset_{i}_{j} (= weight_{j}_e{e} 1)) (= weight_{i}_e{e} 1)))\n")
 
                 for k in incident:
                     if k == i or k == j:
@@ -537,7 +538,6 @@ class FraSmtSolver:
             for j in range(1, n + 1):
                 if i == j:
                     continue
-                #if j not in incident:
                 self.stream.write("(declare-const forbidden_{}_{} Bool)\n".format(i, j))
 
         for i in range(1, n + 1):
@@ -552,6 +552,7 @@ class FraSmtSolver:
 
                 if j not in incident:
                     self.stream.write(f"(assert (=> arc_{i}_{j} forbidden_{i}_{j}))\n")
+
                     for k in range(1, n + 1):
                         if j == k or i == k:
                             continue
@@ -561,6 +562,7 @@ class FraSmtSolver:
                         else:
                             self.stream.write(f"(assert (=> (and arc_{i}_{k} (not ord_{j}_{k})) forbidden_{i}_{j})))\n")
                 else:
+                    # TODO: This is for some reason faster than directly setting weight. Change this for SAT!
                     self.stream.write(f"(assert (=> (and arc_{i}_{j} (not subset_{j}_{i})) forbidden_{i}_{j}))\n")
 
                 for e in self.hypergraph.incident_edges(i):
