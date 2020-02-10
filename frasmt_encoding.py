@@ -497,24 +497,30 @@ class FraSmtSolver:
 
         # # Whenever a tree node covers an edge, it covers all of the edge's vertices
         for i in range(1, n+1):
-            for j in range(1, n + 1):
+            incident = set()
+            for e in self.hypergraph.incident_edges(i):
+                incident.update(self.hypergraph.get_edge(e))
+            incident.remove(i)
+
+            for j in incident:
                 self.stream.write("(declare-const subset_{}_{} Bool)\n".format(i, j))
 
         for i in range(1, n+1):
-            for j in range(1, n + 1):
+            incident = set()
+            for e in self.hypergraph.incident_edges(i):
+                incident.update(self.hypergraph.get_edge(e))
+            incident.remove(i)
+            for j in incident:
                 if i == j:
                     continue
                 self.stream.write(f"(assert (=> subset_{j}_{i} arc_{i}_{j}))\n")
-                if i < j:
-                    self.stream.write(f"(assert (=> subset_{j}_{i} ord_{i}_{j}))\n")
-                    self.stream.write(f"(assert (=> subset_{i}_{j} (not ord_{i}_{j})))\n")
 
                 for e in self.hypergraph.edges():
                     # = 1 is superior to > 0. Keeping these two clauses separate is faster than (= w1 w2)
                     self.stream.write(f"(assert (=> (and subset_{i}_{j} (= weight_{i}_e{e} 0)) (= weight_{j}_e{e} 0)))\n")
                     self.stream.write(f"(assert (=> (and subset_{i}_{j} (= weight_{i}_e{e} 1)) (= weight_{j}_e{e} 1)))\n")
 
-                for k in range(1, n + 1):
+                for k in incident:
                     if k == i or k == j:
                         continue
                     self.stream.write("(assert (=> (and arc_{i}_{k} (not arc_{j}_{k})) (not subset_{i}_{j})))\n"
