@@ -272,7 +272,7 @@ class FraSmtSolver:
                         "(assert (or (not block_{i}_{j}_{k}) arc_{k}_{i}))\n"
                             .format(i=i, j=j, k=k))
 
-    def encode(self, clique=None, twins=None, htd=True, arcs=None, order=None, enforce_lex=True, edges=None, bags=None, sb=True, weighted=False):
+    def encode(self, clique=None, twins=None, htd=True, arcs=None, order=None, sb=True, weighted=False):
         n = self.hypergraph.number_of_nodes()
 
         self.break_clique(clique=clique)
@@ -320,7 +320,7 @@ class FraSmtSolver:
 
         self.prepare_vars(weighted)
 
-        self.encode(clique=clique, twins=twins, htd=htd, arcs=arcs, order=order, enforce_lex=force_lex, edges=edges, bags=bags, sb=sb, weighted=weighted)
+        self.encode(clique=clique, twins=twins, htd=htd, arcs=arcs, order=order, sb=sb, weighted=weighted)
 
         # assert(False)
         self.fractional_counters(m, weighted)
@@ -447,6 +447,7 @@ class FraSmtSolver:
             ordering.insert(pos, i)
 
         return ordering
+    
     def _get_weights(self, model, ordering, weighted):
         ret = {}
         n = self.hypergraph.number_of_nodes()

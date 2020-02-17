@@ -59,7 +59,7 @@ td = None
 res = None
 lb = None
 before_tm = time.time()
-fl = 'solve_runner'
+fl = 'solve_runner2'
 
 # Compute solution for GHTD
 if args.mode != 3:
