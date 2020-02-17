@@ -12,7 +12,7 @@ output_path = sys.argv[2]
 result_path = sys.argv[3]
 output_name = "slv"
 ratios = [0.05, 0.1, 0.2, 0.3]
-timeout = 1800
+timeout = 7200
 
 _, instance_name = os.path.split(input_file)
 
@@ -35,7 +35,7 @@ def compute_decomp(use_c, htd, cfirst, cld):
     p1 = subprocess.Popen(executable, stdin=inpf, stdout=modelf, stderr=errorf, shell=True)
 
     try:
-        p1.wait(timeout)
+        p1.wait(timeout if use_c else 2700)
     except subprocess.TimeoutExpired:
         return None
 
@@ -60,7 +60,12 @@ for i in range(0, len(he)-1):
     nxt = random.randint(i, len(he)-1)
     he[i], he[nxt] = he[nxt], he[i]
 
-for use_htd in [False, True]:
+#for use_htd in [False, True]:
+for use_htd in [False]:
+    result_file = instance_name
+    result_file += ".htd" if use_htd else ".ghtd"
+    if os.path.exists(os.path.join(result_path, result_file + ".w.30.result")):
+        continue
     base = compute_decomp(False, use_htd, False, set())
     if base is None:
         continue
@@ -69,11 +74,13 @@ for use_htd in [False, True]:
         colored = {he[x] for x in range(0, int(len(he) * ratio + 1))}
 
         for optc in [True, False]:
-            res = compute_decomp(True, use_htd, optc, colored)
             result_file = instance_name
             result_file += ".htd" if use_htd else ".ghtd"
             result_file += ".c" if optc else ".w"
             result_file += ("%.2f" % ratio)[1:]
+            if os.path.exists(os.path.join(result_path, result_file + ".result")):
+                continue
+            res = compute_decomp(True, use_htd, optc, colored)
 
             with open(os.path.join(result_path, result_file + ".result"), "w+") as result_f:
                 base_c = max(len([x for x in colored if cv[x] > 0]) for cv in base.result.weights.values())

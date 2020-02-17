@@ -294,6 +294,6 @@ def bandb(instance, bags, cover, subcall=bandb_sub, boundcall=lambda e, v: sum(x
             cover[k] = {e: 1 for e in res[1]}
 
             # This is valid due to the sort order
-            c_global_ub = min(res[0], b_ub)
+            c_global_ub = res[0]
         else:
             c_global_ub = b_ub

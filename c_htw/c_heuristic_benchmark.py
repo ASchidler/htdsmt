@@ -54,7 +54,6 @@ for ratio in ratios:
     results['clast_b'] = (clast_b[0], clast_b[1])
 
     with open(result_file, "w+") as outp:
-        outp = sys.stdout
         names = list(results.keys())
         names.sort()
         # minimum found width and minimum found c
