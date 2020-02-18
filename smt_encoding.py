@@ -9,57 +9,35 @@ import networkx as nx
 
 
 class HtdSmtEncoding:
-    def __init__(self, hypergraph, stream, wprecision=20, timeout=0, checker_epsilon=None):
-        self.__checker_epsilon = checker_epsilon
+    def __init__(self, hypergraph, stream):
         self.hypergraph = hypergraph
         self.num_vars = 1
         self.num_cls = 0
-        self.timeout = timeout
-        self.ord = None
-        self.arc = None
-        self.weight = None
 
         self.__clauses = []
         self._vartab = {}
         self.stream = stream
         self.cards = []
-        self.wprecision = wprecision
         self.stream.write('(set-option :print-success false)\n(set-option :produce-models true)\n')
 
     def prepare_vars(self, weighted):
         n = self.hypergraph.number_of_nodes()
         m = self.hypergraph.number_of_edges()
 
-        # self.ord = np.zeros((n + 1, n + 1), dtype=int)
-        self.ord = [[None for j in range(n + 1)] for i in range(n + 1)]
         # ordering
         for i in range(1, n + 1):
-            # TODO: so far more variables
             for j in range(i + 1, n + 1):
-                # for j in range(i + 1, n + 1):
-                # (declare-const ord_ij Bool)
-                self.ord[i][j] = self.add_var(name='ord_%s_%s' % (i, j))
                 self.stream.write("(declare-const ord_{i}_{j} Bool)\n".format(i=i, j=j))
 
         # arcs
-        self.arc = [[None for j in range(n + 1)] for i in range(n + 1)]
-        # self.arc = np.zeros((n + 1, n + 1), dtype=int)
         for i in range(1, n + 1):
             for j in range(1, n + 1):
                 # declare arc_ij variables
-                self.arc[i][j] = self.add_var(name='arc_%s_%s' % (i, j))
                 self.stream.write("(declare-const arc_{i}_{j} Bool)\n".format(i=i, j=j))
 
         # weights
-        self.weight = [[None for ej in range(m + 1)]
-                       for j in range(n + 1)]
-
         for j in range(1, n + 1):
             for ej in range(1, m + 1):
-                # (declare-const weight_j_e Real)
-                self.weight[j][ej] = self.add_var(name='weight_%s_e%s' % (j, ej))
-
-                # Int is probably faster, real is more generic...
                 self.stream.write("(declare-const weight_{i}_e{ej} Int)\n".format(i=j, ej=ej))
                 if weighted:
                     # TODO: Check for optimal encoding
@@ -70,18 +48,6 @@ class HtdSmtEncoding:
                     # self.stream.write("(assert (or (= weight_{i}_e{ej} 0) (= weight_{i}_e{ej} 1)))\n".format(i=j, ej=ej))
                     self.stream.write("(assert (<= weight_{i}_e{ej} 1))\n".format(i=j, ej=ej))
                     self.stream.write("(assert (>= weight_{i}_e{ej} 0))\n".format(i=j, ej=ej))
-
-    def add_cards(self, C):
-        self.cards.append(C)
-
-    # z3.Real
-    def add_var(self, name):
-        vid = self.num_vars
-
-        self._vartab[vid] = name
-        self.num_vars += 1
-        # exit(1)
-        return vid
 
     def literal_str(self, x):
         if x < 0:
@@ -97,7 +63,7 @@ class HtdSmtEncoding:
         self.num_cls += 1
 
     # prepare variables
-    def fractional_counters(self, m, weighted):
+    def fractional_counters(self):
         n = self.hypergraph.number_of_nodes()
 
         for j in range(1, n + 1):
@@ -108,7 +74,7 @@ class HtdSmtEncoding:
 
             weights = f"(+ {' '.join(weights)})" if len(weights) > 1 else weights[0]
 
-            self.stream.write("(assert (<= {weights} {m}))\n".format(weights=weights, m=m))
+            self.stream.write("(assert (<= {weights} m))\n".format(weights=weights))
 
             # set optimization variable or value for SAT check
 
@@ -120,10 +86,10 @@ class HtdSmtEncoding:
         for i in range(1, n + 1):
             for j in range(i+1, n + 1):
                 # Arcs cannot go in both directions
-                self.add_clause([-self.arc[j][i], -self.arc[i][j]])
+                self.add_clause([f"(not arc_{j}_{i})", f"(not arc_{i}_{j})"])
                 # Enforce arc direction from smaller to bigger ordered vertex
-                self.add_clause([-self.ord[i][j], -self.arc[j][i]])
-                self.add_clause([self.ord[i][j], -self.arc[i][j]])
+                self.add_clause([f"(not ord_{i}_{j})", f"(not arc_{j}_{i})"])
+                self.add_clause([f"ord_{i}_{j}", f"(not arc_{i}_{j})"])
 
         for i in range(1, n + 1):
             for j in range(1, n + 1):
@@ -135,10 +101,11 @@ class HtdSmtEncoding:
                 for l in range(1, n + 1):
                     if i == l or j == l:
                         continue
+
                     C = []
-                    C.append(-self.ord[i][j] if i < j else self.ord[j][i])
-                    C.append(-self.ord[j][l] if j < l else self.ord[l][j])
-                    C.append(self.ord[i][l] if i < l else -self.ord[l][i])
+                    C.append(f"(not ord_{i}_{j})" if i < j else f"ord_{j}_{i}")
+                    C.append(f"(not ord_{j}_{l})" if j < l else f"ord_{l}_{j}")
+                    C.append(f"ord_{i}_{l}" if i < l else f"(not ord_{l}_{i})")
                     self.add_clause(C)
 
         for e in self.hypergraph.edges():
@@ -148,8 +115,8 @@ class HtdSmtEncoding:
                     i, j = j, i
                 if i < j:
                     # AS CLAUSE
-                    self.add_clause([self.ord[i][j], self.arc[j][i]])
-                    self.add_clause([-self.ord[i][j], self.arc[i][j]])
+                    self.add_clause([f"ord_{i}_{j}", f"arc_{j}_{i}"])
+                    self.add_clause([f"(not ord_{i}_{j})", f"arc_{i}_{j}"])
 
         for i in range(1, n + 1):
             for j in range(1, n + 1):
@@ -164,13 +131,13 @@ class HtdSmtEncoding:
                     # self.add_clause([-self.arc[i][j], -self.arc[i][l], -self.ord[j][l], self.arc[j][l]])
                     # self.add_clause([-self.arc[i][j], -self.arc[i][l], self.ord[j][l], self.arc[l][j]])
                     # redundant
-                    self.add_clause([-self.arc[i][j], -self.arc[i][l], self.arc[j][l], self.arc[l][j]])
+                    self.add_clause([f"(not arc_{i}_{j})", f"(not arc_{i}_{l})", f"arc_{j}_{l}", f"arc_{l}_{j}"])
 
         # forbid self loops
         for i in range(1, n + 1):
             # self.__solver.add_assertion(Not(self.literal(self.arc[i][i])))
             # self.stream.write("(assert (not arc_{i}_{i}))\n".format(i=i))
-            self.add_clause([-self.arc[i][i]])
+            self.add_clause([f"(not arc_{i}_{i})"])
 
     def cover(self, n, weighted):
         # If a vertex j is in the bag, it must be covered:
@@ -222,25 +189,6 @@ class HtdSmtEncoding:
                         # else:
                         #     self.add_clause([-self.ord[j][i]])
 
-    # twins is a list of list of vertices that are twins
-    def encode_twins(self, twin_iter, clique):
-        if not clique:
-            clique = []
-        if twin_iter:
-            # vertices of a twin class are order lexicographically
-            for twins in twin_iter:
-                if len(twins) <= 1:
-                    continue
-                for i in twins:
-                    if i in clique:
-                        continue
-                    for j in twins:
-                        if i != j:
-                            if j in clique:
-                                continue
-                            if i < j:
-                                self.add_clause([self.ord[i][j]])
-
     def break_order_symmetry(self):
         n = self.hypergraph.number_of_nodes()
 
@@ -273,18 +221,18 @@ class HtdSmtEncoding:
                         "(assert (or (not block_{i}_{j}_{k}) arc_{k}_{i}))\n"
                             .format(i=i, j=j, k=k))
 
-    def encode(self, clique=None, twins=None, htd=True, arcs=None, order=None, sb=True, weighted=False):
+    def encode(self, clique=None, htd=True, arcs=None, order=None, sb=True, weighted=False):
         n = self.hypergraph.number_of_nodes()
 
         self.break_clique(clique=clique)
         self.elimination_ordering(n)
         self.cover(n, weighted)
-        self.encode_twins(twin_iter=twins, clique=clique)
+
         if sb:
             self.break_order_symmetry()
 
         if htd:
-            self.encode_htd2(n, weighted=weighted)
+            self.encode_htd2(n)
 
         if arcs:
             for i in range(1, n + 1):
@@ -303,11 +251,8 @@ class HtdSmtEncoding:
                     else:
                         self.stream.write("(assert (not ord_{i}_{j}))\n".format(i=i, j=j))
 
-    def solve(self, clique=None, twins=None, optimize=True, htd=True, lb=None, ub=None, arcs=None, order=None, force_lex=True,
-              fix_val=None, edges=None, bags=None, sb=True, weighted=False):
-        var = self.add_var("m")
-        m = self._vartab[var]
-
+    def solve(self, clique=None, optimize=True, htd=True, lb=None, ub=None, arcs=None, order=None,
+              fix_val=None, sb=True, weighted=False):
         self.stream.write("(declare-const m Int)\n")
         self.stream.write("(assert (>= m 1))\n")
 
@@ -321,11 +266,9 @@ class HtdSmtEncoding:
 
         self.prepare_vars(weighted)
 
-        self.encode(clique=clique, twins=twins, htd=htd, arcs=arcs, order=order, sb=sb, weighted=weighted)
+        self.encode(clique=clique, htd=htd, arcs=arcs, order=order, sb=sb, weighted=weighted)
 
-        # assert(False)
-        self.fractional_counters(m, weighted)
-        # self.add_all_at_most(m)
+        self.fractional_counters()
 
         if optimize:
             self.stream.write("(minimize m)\n")
@@ -363,7 +306,7 @@ class HtdSmtEncoding:
 
         try:
             ordering = self._get_ordering(model)
-            weights = self._get_weights(model, ordering, weighted)
+            weights = self._get_weights(model, ordering)
             arcs = self._get_arcs(model)
             #edges = self._get_edges(model) if htd else None
             edges = None
@@ -449,7 +392,7 @@ class HtdSmtEncoding:
 
         return ordering
     
-    def _get_weights(self, model, ordering, weighted):
+    def _get_weights(self, model, ordering):
         ret = {}
         n = self.hypergraph.number_of_nodes()
 
@@ -493,9 +436,7 @@ class HtdSmtEncoding:
 
         return ret
 
-    def encode_htd2(self, n, weighted=False):
-        m = self.hypergraph.number_of_edges()
-
+    def encode_htd2(self, n):
         # # Whenever a tree node covers an edge, it covers all of the edge's vertices
         for i in range(1, n+1):
             incident = set()
