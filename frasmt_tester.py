@@ -3,7 +3,7 @@ from __future__ import absolute_import
 import sys
 import logging
 import time
-import frasmt_solver as solver
+import smt_solver as solver
 from lib.htd_validate.htd_validate.decompositions import GeneralizedHypertreeDecomposition
 
 # End of imports

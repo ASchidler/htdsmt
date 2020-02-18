@@ -2,7 +2,7 @@ import sys
 import time
 import logging
 
-import frasmt_solver as solver
+import smt_solver as solver
 from lib.htd_validate.htd_validate.decompositions import GeneralizedHypertreeDecomposition
 
 instance = sys.argv[1]

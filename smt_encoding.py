@@ -7,7 +7,8 @@ from decomposition_result import DecompositionResult
 from bounds import upper_bounds
 import networkx as nx
 
-class FraSmtSolver:
+
+class HtdSmtEncoding:
     def __init__(self, hypergraph, stream, wprecision=20, timeout=0, checker_epsilon=None):
         self.__checker_epsilon = checker_epsilon
         self.hypergraph = hypergraph

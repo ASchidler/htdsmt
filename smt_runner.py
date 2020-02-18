@@ -4,7 +4,7 @@ from __future__ import absolute_import
 import argparse
 import sys
 import logging
-import frasmt_solver as solver
+import smt_solver as solver
 from lib.htd_validate.htd_validate.decompositions import GeneralizedHypertreeDecomposition
 import time
 

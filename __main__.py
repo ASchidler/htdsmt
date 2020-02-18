@@ -1,1 +1,1 @@
-import frasmt_runner
+import smt_runner
