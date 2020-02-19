@@ -7,6 +7,7 @@ import logging
 import smt_solver as solver
 from lib.htd_validate.htd_validate.decompositions import GeneralizedHypertreeDecomposition
 import time
+import os
 
 # End of imports
 
@@ -49,6 +50,9 @@ parser.add_argument('-w', dest='weighted', action='store_true', default=False, h
 
 args = parser.parse_args()
 tmp_dir = args.tmp_dir.strip()
+if "TMPDIR" in os.environ:
+    tmp_dir = os.environ['TMPDIR']
+
 
 # Use cliques only for GHTD. For HTD they even slow the heuristic methods down
 clique_mode = 2 if args.mode == 0 else 0

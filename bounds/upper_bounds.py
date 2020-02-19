@@ -126,7 +126,8 @@ def simplify_decomp(bags, tree, cover=None):
                         if cover:
                             cover[u] = cover[n]
 
-                    cover.pop(n)
+                    if cover:
+                        cover.pop(n)
                     bags.pop(n)
                     tree.remove_node(n)
                     changed = True

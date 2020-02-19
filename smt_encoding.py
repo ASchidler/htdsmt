@@ -59,7 +59,7 @@ class HtdSmtEncoding:
     def add_clause(self, C):
         # C = map(neg, C)
         # self.stream.write("%s 0\n" %" ".join(map(str,C)))
-        self.stream.write("(assert (or %s))\n" % (' '.join([self.literal_str(x) for x in C])))
+        self.stream.write("(assert (or %s))\n" % (' '.join(C)))
         self.num_cls += 1
 
     # prepare variables
@@ -317,7 +317,7 @@ class HtdSmtEncoding:
 
             htdd = HypertreeDecomposition.from_ordering(hypergraph=self.hypergraph, ordering=ordering,
                                                         weights=weights,
-                                                        checker_epsilon=self.__checker_epsilon, edges=edges, bags=bags, htd=htd, repair=repair)
+                                                        checker_epsilon=None, edges=edges, bags=bags, htd=htd, repair=repair)
 
             if htd:
                 for i in range(1, self.hypergraph.number_of_nodes()+1):
@@ -407,19 +407,6 @@ class HtdSmtEncoding:
         incident_edges = self.hypergraph.incident_edges(last_vertex).keys()
         if len(incident_edges) == 0:
             raise TypeError("Fractional Hypertree Decompositions for graphs with isolated vertices.")
-
-        return ret
-
-    def _get_bags(self, model):
-        n = self.hypergraph.number_of_nodes()
-        ret = {}
-
-        for i in range(1, n+1):
-            ret[i] = {}
-            #ret[i][i] = True
-            for j in range(1, n+1):
-                #if i != j:
-                ret[i][j] = model["is_bag_{}_{}".format(i, j)]
 
         return ret
 
