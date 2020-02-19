@@ -65,8 +65,8 @@ class HtdSatEncoding:
 
     def elimination_ordering(self):
         n = self.hypergraph.number_of_nodes()
-
-        # Some improvements
+        #
+        # # Some improvements
         for i in range(1, n + 1):
             for j in range(i + 1, n + 1):
                 # Arcs cannot go in both directions
@@ -79,8 +79,6 @@ class HtdSatEncoding:
             for j in range(1, n + 1):
                 if i == j:
                     continue
-
-                self._add_clause(-self.ord[i][j], -self.arc[j][i])
 
                 for ln in range(1, n + 1):
                     if i == ln or j == ln:
@@ -119,11 +117,10 @@ class HtdSatEncoding:
                     continue
 
                 # arc_ij then j must be covered by some edge (because j will end up in one bag)
-                weights = []
+                weights = [-self.arc[i][j]]
                 for e in self.hypergraph.incident_edges(j):
                     weights.append(self.weight[i][e])
 
-                weights.append(-self.arc[i][j])
                 self._add_clause(*weights)
 
     def encode_htd(self):
@@ -191,15 +188,20 @@ class HtdSatEncoding:
                 for j in range(1, m)]
                for _ in range(0, n)]
 
+        # Note that these vars are 0 based, while weight is 1 based, so add 1 to all indices when using weight
         for i in range(0, n):
             for j in range(1, m - 1):
                 # Ensure that the counter never decrements, i.e. ensure carry over
                 for ln in range(0, min(len(ctr[i][j - 1]), bound)):
-                    self._add_clause(-ctr[i][j - 1][ln], ctr[i][j][ln])
+                    self._add_clause(-ctr[i][j - 1][ln],  ctr[i][j][ln])
+                    self._add_clause( ctr[i][j - 1][ln], -ctr[i][j][ln], self.weight[i + 1][j + 1])
 
                 # Increment counter for each arc
                 for ln in range(1, min(len(ctr[i][j]), bound)):
-                    self._add_clause(-self.weight[i+1][j+1], -ctr[i][j - 1][ln - 1], ctr[i][j][ln])
+                    self._add_clause(-ctr[i][j - 1][ln - 1],  ctr[i][j][ln], -self.weight[i+1][j+1])
+                    self._add_clause( ctr[i][j - 1][ln - 1], -ctr[i][j][ln])
+
+
 
         # Ensure that counter is initialized on the first arc
         for i in range(0, n):
@@ -213,12 +215,32 @@ class HtdSatEncoding:
                 self._add_clause(-self.weight[i+1][j+1], -ctr[i][j - 1][bound - 1])
 
     def encode(self, ub, htd):
+        n = self.hypergraph.number_of_nodes()
+        m = self.hypergraph.number_of_edges()
         self._init_vars(htd)
+
+        # Write header placeholder
+        estimated_vars = (1 + ub) * self.varcount
+        # This is way too much, but better too many than too few: m * n^4 * 100
+        estimated_clauses = 100 * m * n * n * n * n
+        placeholder = f"p cnf {estimated_vars} {estimated_clauses}"
+        self.stream.write(placeholder)
+        self.stream.write("\n")
+
+        # Create Encoding
         self.elimination_ordering()
         if htd:
             self.encode_htd()
         self.cover()
         self._encode_cardinality(ub)
+
+        # Fill in correct header
+        self.stream.seek(0)
+        real_header = f"p cnf {self.varcount} {self.clausecount}"
+        self.stream.seek(0)
+        self.stream.write(real_header)
+        for _ in range(len(real_header), len(placeholder)):
+            self.stream.write(" ")
 
     def decode(self, inp):
         is_unsat = inp.readline().lower().startswith("unsat")
