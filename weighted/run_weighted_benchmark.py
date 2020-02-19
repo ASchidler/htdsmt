@@ -14,8 +14,7 @@ fl = 'ghtw_solver2'
 
 def run_portfolio(c_instance, weighted):
     lb = None
-    res = solver.solve(tmp_dir, fl, c_instance, htd=False, force_lex=False,
-                       sb=False, heuristic_repair=True, clique_mode=0,
+    res = solver.solve(tmp_dir, fl, c_instance, htd=False, sb=False, heuristic_repair=True, clique_mode=0,
                        weighted=weighted)
     td = res.decomposition if res is not None else None
     if td is not None and GeneralizedHypertreeDecomposition.validate(td, td.hypergraph):
@@ -28,13 +27,13 @@ def run_portfolio(c_instance, weighted):
         result = res.size
 
         # Compute stratified solution
-        res = solver.solve(tmp_dir, fl, c_instance, htd=True, force_lex=False, fix_val=result,
+        res = solver.solve(tmp_dir, fl, c_instance, htd=True, fix_val=result,
                            arcs=arcs, heuristic_repair=False, weighted=weighted)
         td = res.decomposition if res is not None else None
 
     # Use HTD encoding
     if td is None or not td.validate(td.hypergraph):
-        res = solver.solve(tmp_dir, fl, c_instance, force_lex=False, sb=False,
+        res = solver.solve(tmp_dir, fl, c_instance, sb=False,
                            heuristic_repair=False, lb=lb, weighted=weighted)
         td = res.decomposition
 

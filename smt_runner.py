@@ -63,8 +63,7 @@ fl = 'solve_runner2'
 
 # Compute solution for GHTD
 if args.mode != 3:
-    res = solver.solve(tmp_dir, fl, args.graph, htd=False, force_lex=False,
-                       sb=args.sb if args.mode <= 1 else False, heuristic_repair=repair, clique_mode=clique_mode,
+    res = solver.solve(tmp_dir, fl, args.graph, htd=False, sb=args.sb if args.mode <= 1 else False, heuristic_repair=repair, clique_mode=clique_mode,
                        weighted=args.weighted)
     td = res.decomposition if res is not None else None
     if td is not None and GeneralizedHypertreeDecomposition.validate(td, td.hypergraph):
@@ -80,13 +79,13 @@ if args.mode == 2 and res is not None and not td.validate(td.hypergraph):
     bags = td.bags if args.use_bags else None
 
     # Compute stratified solution
-    res = solver.solve(tmp_dir, fl, args.graph, htd=True, force_lex=False, edges=edges, fix_val=result,
-                       bags=bags, order=ordering, arcs=arcs, heuristic_repair=False, weighted=args.weighted)
+    res = solver.solve(tmp_dir, fl, args.graph, htd=True, fix_val=result,
+                       order=ordering, arcs=arcs, heuristic_repair=False, weighted=args.weighted)
     td = res.decomposition if res is not None else None
 
 # Use HTD encoding
 if args.mode >= 3 and (td is None or not td.validate(td.hypergraph)):
-    res = solver.solve(tmp_dir, fl, args.graph, htd=True, force_lex=args.force_lex, sb=args.sb,
+    res = solver.solve(tmp_dir, fl, args.graph, htd=True, sb=args.sb,
                        heuristic_repair=False, lb=lb, weighted=args.weighted)
     td = res.decomposition
 
@@ -94,6 +93,7 @@ if args.mode >= 3 and (td is None or not td.validate(td.hypergraph)):
 if res is None:
     print("No model. For heuristic methods this can signal a failure. In case of a timeout used, this can mean "
           "the timeout has been reached. See output model and error file for potential error messages.")
+    exit(1)
 
 # Display the HTD
 valid = td.validate(td.hypergraph)

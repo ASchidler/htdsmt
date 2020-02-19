@@ -15,8 +15,8 @@ import bounds.lower_bounds as lbs
 import weighted.weight_upper_bound as wub
 
 
-def solve(output_path, output_name, input_file, clique_mode=0, htd=True, lb=None, arcs=None, order=None, force_lex=False,
-          fix_val=None, edges=None, bags=None, sb=True, timeout=0, heuristic_repair=True, weighted=False):
+def solve(output_path, output_name, input_file, clique_mode=0, htd=True, lb=None, arcs=None, order=None, fix_val=None,
+          sb=True, timeout=0, heuristic_repair=True, weighted=False):
 
     # Open output files, these are used to interface with the solver
     base_path = os.path.join(output_path, output_name)
@@ -58,7 +58,7 @@ def solve(output_path, output_name, input_file, clique_mode=0, htd=True, lb=None
     #     ub = ubs.greedy(hypergraph, htd) if not weighted else wub.greedy(hypergraph)
     #     print(ub)
     enc = smt_encoding.HtdSmtEncoding(hypergraph, stream=inpf)
-    enc.solve(htd=htd, force_lex=force_lex, edges=edges, fix_val=fix_val, bags=bags, order=order, arcs=arcs,
+    enc.solve(htd=htd, fix_val=fix_val, order=order, arcs=arcs,
               sb=sb, clique=clique, lb=lb, ub=ub, weighted=weighted)
     # enc = frasmt_encoding2.FraSmtSolver(hypergraph, stream=inpf, checker_epsilon=None)
     # enc.solve(htd=htd)
@@ -89,7 +89,6 @@ def solve(output_path, output_name, input_file, clique_mode=0, htd=True, lb=None
         res = enc.decode(outp, False, htd=htd, repair=heuristic_repair, weighted=weighted)
     except ValueError as ee:
         raise ee
-        return None
 
     if reverse_mapping:
         remap(res, reverse_mapping, hypergraph_in)
