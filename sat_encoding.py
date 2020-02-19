@@ -215,9 +215,9 @@ class HtdSatEncoding:
     def encode(self, ub, htd):
         self._init_vars(htd)
         self.elimination_ordering()
-        self.cover()
         if htd:
             self.encode_htd()
+        self.cover()
         self._encode_cardinality(ub)
 
     def decode(self, inp):
