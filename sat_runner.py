@@ -28,10 +28,11 @@ if hypergraph_in is None or (hypergraph2 is not None and len(hypergraph2.edges()
 
 known_ub = None
 known_lb = None
+
 current_bound = bnd.greedy(hypergraph_in, False, bb=False)
 timeout = 0
 before_tm = time.time()
-
+print(f"Starting with {current_bound}")
 while known_lb is None or known_ub is None or known_lb != known_ub:
     tmpin = os.path.join(tmp_dir, str(os.getpid()) + ".in")
     tmpout = os.path.join(tmp_dir, str(os.getpid()) + ".out")
