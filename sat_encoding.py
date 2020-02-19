@@ -18,8 +18,8 @@ class HtdSatEncoding:
         self.subset = {i: {} for i in range(0, n + 1)}
 
     def _add_clause(self, *args):
-        self.stream.write(self.clause_literal.format(' '.join((self.clause_literal_fun(x) for x in args))))
-        self.stream.write("\n")
+        self.stream.write(' '.join(args))
+        self.stream.write(" 0\n")
         self.clausecount += 1
 
     def _add_var(self):
@@ -61,9 +61,6 @@ class HtdSatEncoding:
                     if i == j:
                         continue
                     self.forbidden[i][j] = self._add_var()
-
-    def _cardinality_constraints(self):
-        pass
 
     def elimination_ordering(self):
         n = self.hypergraph.number_of_nodes()
@@ -127,8 +124,8 @@ class HtdSatEncoding:
 
                 self._add_clause(*weights)
 
-    def encode_htd2(self, n):
-        m = self.hypergraph.number_of_edges()
+    def encode_htd(self):
+        n = self.hypergraph.number_of_nodes()
 
         for i in range(1, n+1):
             incident = set()
@@ -177,3 +174,83 @@ class HtdSatEncoding:
 
                 for e in self.hypergraph.incident_edges(i):
                     self._add_clause(-self.forbidden[i][j], -self.weight[j][e])
+
+    def _encode_cardinality(self, bound):
+        """Enforces cardinality constraints. Cardinality of 2-D structure variables must not exceed bound"""
+        # Counter works like this: ctr[i][j][0] states that an arc from i to j exists
+        # These are then summed up incrementally edge by edge
+
+        m = self.hypergraph.num_hyperedges()
+        n = self.hypergraph.number_of_nodes()
+
+        # Define counter variables ctr[i][j][l] with 1 <= i <= n, 1 <= j < n, 1 <= l <= min(j, bound)
+        ctr = [[[self._add_var()
+                 for _ in range(0, min(j, bound))]
+                # j has range 0 to n-1. use 1 to n, otherwise the innermost number of elements is wrong
+                for j in range(1, m)]
+               for _ in range(0, n)]
+
+        for i in range(0, n):
+            for j in range(1, m - 1):
+                # Ensure that the counter never decrements, i.e. ensure carry over
+                for ln in range(0, min(len(ctr[i][j - 1]), bound)):
+                    self._add_clause(-ctr[i][j - 1][ln], ctr[i][j][ln])
+
+                # Increment counter for each arc
+                for ln in range(1, min(len(ctr[i][j]), bound)):
+                    self._add_clause(-self.weight[i][j], -ctr[i][j - 1][ln - 1], ctr[i][j][ln])
+
+        # Ensure that counter is initialized on the first arc
+        for i in range(0, n):
+            for j in range(0, m - 1):
+                self._add_clause(-self.weight[i][j], ctr[i][j][0])
+
+        # Conflict if target is exceeded
+        for i in range(0, n):
+            for j in range(bound, m):
+                # Since we start to count from 0, bound - 2
+                self._add_clause(-self.weight[i][j], -ctr[i][j - 1][bound - 1])
+
+    def encode(self, ub, htd):
+        self._init_vars(htd)
+        self.elimination_ordering()
+        self.cover()
+        if htd:
+            self.encode_htd()
+        self._encode_cardinality(ub)
+
+    def decode(self, inp):
+        inp.seek(0)
+        is_sat = inp.readline().lower().startswith("unsat")
+        if not is_sat:
+            return None
+
+        # We could also filter only interesting vars, if necessary
+        # We could also make this a list...
+        model = {}
+        buffer = []
+
+        def buffer_val():
+            val = int(''.join(buffer))
+            if val < 0:
+                model[-1 * val] = False
+            else:
+                model[val] = True
+
+        while inp.readble():
+            cc = inp.read(1)
+            if cc == ' ':
+                buffer_val()
+        buffer_val()
+
+        # Find weight
+        width = 0
+
+        for j in range(1, self.hypergraph.number_of_nodes() + 1):
+            cwidth = 0
+            for ej in range(1, self.hypergraph.number_of_edges() + 1):
+                if model[self.weight[j][ej]]:
+                    cwidth += 1
+            width = max(width, cwidth)
+
+        return width
