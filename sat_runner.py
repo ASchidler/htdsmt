@@ -12,6 +12,8 @@ from sat_encoding import HtdSatEncoding
 parser = argparse.ArgumentParser(description='Calculate the hypertree decomposition for a given hypergraph')
 parser.add_argument('graph', metavar='graph_file', type=str,
                    help='The input file containing the hypergraph')
+parser.add_argument('-g', dest='ghtd', action='store_true', default=False,
+                    help='Compute a GHTD instead of a HTD')
 
 tmp_dir = "/tmp"
 if "TMPDIR" in os.environ:
@@ -38,7 +40,7 @@ while known_lb is None or known_ub is None or known_lb != known_ub:
     tmpout = os.path.join(tmp_dir, str(os.getpid()) + ".out")
     with open(tmpin, "w") as instr:
         encoder = HtdSatEncoding(instr, hypergraph_in)
-        encoder.encode(current_bound, True)
+        encoder.encode(current_bound, not args.ghtd)
 
     p1 = subprocess.Popen(['minisat', '-verb=0', tmpin, tmpout])
     error_str = None
