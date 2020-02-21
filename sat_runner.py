@@ -34,15 +34,18 @@ known_lb = None
 current_bound = bnd.greedy(hypergraph_in, False, bb=False)
 timeout = 0
 before_tm = time.time()
-print(f"Starting with {current_bound}")
+#current_bound = 6
 while known_lb is None or known_ub is None or known_lb != known_ub:
+    print(f"Current bound: {current_bound}")
     tmpin = os.path.join(tmp_dir, str(os.getpid()) + ".in")
     tmpout = os.path.join(tmp_dir, str(os.getpid()) + ".out")
     with open(tmpin, "w") as instr:
         encoder = HtdSatEncoding(instr, hypergraph_in)
         encoder.encode(current_bound, not args.ghtd)
 
-    p1 = subprocess.Popen(['minisat', '-verb=0', tmpin, tmpout])
+    with open(tmpout, "w") as outf:
+        p1 = subprocess.Popen(['./lingeling', "-q", "--witness", tmpin], stdout=outf)
+        #p1 = subprocess.Popen(['minisat', '-verb=0', tmpin, tmpout])
     error_str = None
 
     if timeout == 0:

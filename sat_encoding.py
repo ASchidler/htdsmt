@@ -180,7 +180,13 @@ class HtdSatEncoding:
 
         m = self.hypergraph.num_hyperedges()
         n = self.hypergraph.number_of_nodes()
-
+        # self.stream.write(f"#variable= {self.varcount} #constraint= {self.hypergraph.number_of_nodes()}\n")
+        # for i in range(1, n+1):
+        #     weights = []
+        #     for e in range(1, m+1):
+        #         weights.append(f"+1 {self.weight[i][e]}")
+        #     self.stream.write(f"{' '.join(weights)} <= {bound};\n")
+        # return
         # Define counter variables ctr[i][j][l] with 1 <= i <= n, 1 <= j < n, 1 <= l <= min(j, bound)
         ctr = [[[self._add_var()
                  for _ in range(0, min(j, bound))]
@@ -194,14 +200,12 @@ class HtdSatEncoding:
                 # Ensure that the counter never decrements, i.e. ensure carry over
                 for ln in range(0, min(len(ctr[i][j - 1]), bound)):
                     self._add_clause(-ctr[i][j - 1][ln],  ctr[i][j][ln])
-                    self._add_clause( ctr[i][j - 1][ln], -ctr[i][j][ln], self.weight[i + 1][j + 1])
+                    #self._add_clause( ctr[i][j - 1][ln], -ctr[i][j][ln], self.weight[i + 1][j + 1])
 
                 # Increment counter for each arc
                 for ln in range(1, min(len(ctr[i][j]), bound)):
                     self._add_clause(-ctr[i][j - 1][ln - 1],  ctr[i][j][ln], -self.weight[i+1][j+1])
-                    self._add_clause( ctr[i][j - 1][ln - 1], -ctr[i][j][ln])
-
-
+                    #self._add_clause( ctr[i][j - 1][ln - 1], -ctr[i][j][ln])
 
         # Ensure that counter is initialized on the first arc
         for i in range(0, n):
@@ -233,7 +237,7 @@ class HtdSatEncoding:
             self.encode_htd()
         self.cover()
         self._encode_cardinality(ub)
-
+        #self.break_order_symmetry()
         # Fill in correct header
         self.stream.seek(0)
         real_header = f"p cnf {self.varcount} {self.clausecount}"
@@ -243,7 +247,8 @@ class HtdSatEncoding:
             self.stream.write(" ")
 
     def decode(self, inp):
-        is_unsat = inp.readline().lower().startswith("unsat")
+        first_line = inp.readline().lower()
+        is_unsat = first_line.startswith("unsat") or first_line.startswith("s unsat")
         if is_unsat:
             return None
 
@@ -253,17 +258,21 @@ class HtdSatEncoding:
         buffer = []
 
         def buffer_val():
-            val = int(''.join(buffer))
-            if val < 0:
-                model[-1 * val] = False
-            else:
-                model[val] = True
+            str_val = ''.join(buffer)
+            if str_val.strip() != "":
+                val = int(str_val)
+                if val < 0:
+                    model[-1 * val] = False
+                else:
+                    model[val] = True
 
         while inp.readable():
             cc = inp.read(1)
-            if cc == ' ':
+            if cc == ' ' or cc == "\n":
                 buffer_val()
                 buffer.clear()
+            elif cc == "v":
+                pass
             elif cc == "":
                 break
             else:
@@ -281,3 +290,40 @@ class HtdSatEncoding:
             width = max(width, cwidth)
 
         return width
+
+    def break_order_symmetry(self):
+        n = self.hypergraph.number_of_nodes()
+
+        def tord(ix, jx):
+            return 'ord_{}_{}'.format(ix, jx) if ix < jx else '(not ord_{}_{})'.format(jx, ix)
+
+        block = [None for _ in range(0, n+1)]
+        for i in range(1, n+1):
+            d = dict()
+            block[i] = d
+            for j in range(i+1, n+1):
+                d[j] = [None for _ in range(0, n + 1)]
+                for k in range(1, n + 1):
+                    if i == k or j == k:
+                        continue
+                    d[j][k] = self._add_var()
+
+        for i in range(1, n+1):
+            for j in range(i+1, n+1):
+                for k in range(1, n + 1):
+                    if i == k or j == k:
+                        continue
+
+                    self._add_clause(-self.ord[j][k], -self.arc[k][i], block[i][j][k])
+                    self._add_clause(-block[i][j][k], self.ord[j][k])
+                    self._add_clause(-block[i][j][k], self.arc[k][i])
+                    # self.stream.write(
+                    #     f"(assert (or (not {tord(j, k)}) (not arc_{k}_{i}) block_{i}_{j}_{k}))\n"
+                    # )
+                    # self.stream.write(
+                    #     "(assert (or (not block_{i}_{j}_{k}) {ord}))\n"
+                    #         .format(i=i, j=j, k=k, ord=tord(j, k)))
+                    #
+                    # self.stream.write(
+                    #     "(assert (or (not block_{i}_{j}_{k}) arc_{k}_{i}))\n"
+                    #         .format(i=i, j=j, k=k))
