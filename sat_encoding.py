@@ -15,7 +15,7 @@ class HtdSatEncoding:
         self.arc = {i: {} for i in range(0, n+1)}
         self.ord = {i: {} for i in range(0, n+1)}
         self.weight = {i: {} for i in range(0, n+1)}
-        self.forbidden = {i: {} for i in range(0, n + 1)}
+        #self.forbidden = {i: {} for i in range(0, n + 1)}
         self.subset = {i: {} for i in range(0, n + 1)}
 
     def _add_clause(self, *args):
@@ -60,8 +60,8 @@ class HtdSatEncoding:
                         continue
                     if j in incident:
                         self.subset[i][j] = self._add_var()
-                    else:
-                        self.forbidden[i][j] = self._add_var()
+                    # else:
+                    #     self.forbidden[i][j] = self._add_var()
 
     def elimination_ordering(self):
         n = self.hypergraph.number_of_nodes()
@@ -159,19 +159,20 @@ class HtdSatEncoding:
                     continue
 
                 if j not in incident:
-                    self._add_clause(-self.arc[i][j], self.forbidden[i][j])
+                    # self._add_clause(-self.arc[i][j], self.forbidden[i][j])
 
                     for e in self.hypergraph.incident_edges(i):
-                        self._add_clause(-self.forbidden[i][j], -self.weight[j][e])
+                        self._add_clause(-self.ord[i][j], -self.weight[j][e])
+                        # self._add_clause(-self.forbidden[i][j], -self.weight[j][e])
 
-                    for k in range(1, n + 1):
-                        if j == k or i == k:
-                            continue
-
-                        self._add_clause(-self.arc[i][k], -self.ord[k][j], self.forbidden[i][j])
+                    # for k in range(1, n + 1):
+                    #     if j == k or i == k:
+                    #         continue
+                    #
+                    #     self._add_clause(-self.arc[i][k], -self.ord[k][j], self.forbidden[i][j])
                 else:
                     for e in self.hypergraph.incident_edges(i):
-                        self._add_clause(-self.arc[i][j], self.subset[j][i], -self.weight[j][e])
+                        self._add_clause(-self.ord[i][j], self.subset[j][i], -self.weight[j][e])
 
     def _encode_cardinality(self, bound):
         """Enforces cardinality constraints. Cardinality of 2-D structure variables must not exceed bound"""
@@ -249,8 +250,13 @@ class HtdSatEncoding:
     def decode(self, inp):
         first_line = inp.readline().lower()
         is_unsat = first_line.startswith("unsat") or first_line.startswith("s unsat")
+
         if is_unsat:
             return None
+
+        # glucose does not write sat/unsat in the first line... first char could also be a -, so check first and second
+        if first_line[0].isdigit() or first_line[1].isdigit():
+            inp.seek(0)
 
         # We could also filter only interesting vars, if necessary
         # We could also make this a list...

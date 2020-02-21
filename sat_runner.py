@@ -29,12 +29,12 @@ if hypergraph_in is None or (hypergraph2 is not None and len(hypergraph2.edges()
     hypergraph_in = hypergraph2
 
 known_ub = None
-known_lb = None
+known_lb = 1
 
 current_bound = bnd.greedy(hypergraph_in, False, bb=False)
 timeout = 0
 before_tm = time.time()
-#current_bound = 6
+
 while known_lb is None or known_ub is None or known_lb != known_ub:
     print(f"Current bound: {current_bound}")
     tmpin = os.path.join(tmp_dir, str(os.getpid()) + ".in")
@@ -44,7 +44,8 @@ while known_lb is None or known_ub is None or known_lb != known_ub:
         encoder.encode(current_bound, not args.ghtd)
 
     with open(tmpout, "w") as outf:
-        p1 = subprocess.Popen(['./lingeling', "-q", "--witness", tmpin], stdout=outf)
+        #p1 = subprocess.Popen(['./lingeling', "-q", "--witness", tmpin], stdout=outf)
+        p1 = subprocess.Popen(['./glucose', '-verb=0', tmpin, tmpout])
         #p1 = subprocess.Popen(['minisat', '-verb=0', tmpin, tmpout])
     error_str = None
 
