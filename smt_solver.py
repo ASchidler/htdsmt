@@ -31,8 +31,6 @@ def solve(output_path, output_name, input_file, clique_mode=0, htd=True, lb=None
     if hypergraph_in is None or (hypergraph2 is not None and len(hypergraph2.edges()) > len(hypergraph_in.edges())):
         hypergraph_in = hypergraph2
 
-    # Check if the vertex label is continuous
-   # hypergraph, reverse_mapping = check_hypergraph_continuity(hypergraph_in)
     hypergraph = hypergraph_in
     reverse_mapping = None
     # Find clique if requested

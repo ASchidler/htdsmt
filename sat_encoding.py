@@ -159,17 +159,8 @@ class HtdSatEncoding:
                     continue
 
                 if j not in incident:
-                    # self._add_clause(-self.arc[i][j], self.forbidden[i][j])
-
                     for e in self.hypergraph.incident_edges(i):
                         self._add_clause(-self.ord[i][j], -self.weight[j][e])
-                        # self._add_clause(-self.forbidden[i][j], -self.weight[j][e])
-
-                    # for k in range(1, n + 1):
-                    #     if j == k or i == k:
-                    #         continue
-                    #
-                    #     self._add_clause(-self.arc[i][k], -self.ord[k][j], self.forbidden[i][j])
                 else:
                     for e in self.hypergraph.incident_edges(i):
                         self._add_clause(-self.ord[i][j], self.subset[j][i], -self.weight[j][e])

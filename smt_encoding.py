@@ -176,16 +176,16 @@ class HtdSmtEncoding:
                     continue
                 for j in clique:
                     if i < j:
-                        self.add_clause([self.ord[i][j]])
+                        self.add_clause([f"ord_{i}_{j}"])
                     else:
-                        self.add_clause([-self.ord[j][i]])
+                        self.add_clause([f"(not ord_{j}_{i})"])
 
             # Vertices of the clique are ordered lexicographically
             for i in clique:
                 for j in clique:
                     if i != j:
                         if i < j:
-                            self.add_clause([self.ord[i][j]])
+                            self.add_clause([f"ord_{i}_{j}"])
                         # else:
                         #     self.add_clause([-self.ord[j][i]])
 
@@ -465,51 +465,20 @@ class HtdSmtEncoding:
             for e in self.hypergraph.incident_edges(i):
                 incident.update(self.hypergraph.get_edge(e))
             incident.remove(i)
-            for j in range(1, n + 1):
-                if i == j:
-                    continue
-                # self.stream.write("(declare-const forbidden_{}_{} Bool)\n".format(i, j))
-
-        for i in range(1, n + 1):
-            incident = set()
-            for e in self.hypergraph.incident_edges(i):
-                incident.update(self.hypergraph.get_edge(e))
-            incident.remove(i)
 
             for j in range(1, n + 1):
                 if i == j:
                     continue
 
                 if j not in incident:
-                    #self.stream.write(f"(assert (=> arc_{i}_{j} forbidden_{i}_{j}))\n")
-                    # if i < j:
-                    #     self.stream.write(f"(assert (=> ord_{i}_{j} forbidden_{i}_{j})))\n")
-                    # else:
-                    #     self.stream.write(f"(assert (=> (not ord_{j}_{i}) forbidden_{i}_{j})))\n")
                     for e in self.hypergraph.incident_edges(i):
                         if i < j:
                             self.stream.write(f"(assert (=> ord_{i}_{j} (= weight_{j}_e{e} 0)))\n")
                         else:
                             self.stream.write(f"(assert (=> (not ord_{j}_{i}) (= weight_{j}_e{e} 0)))\n")
-
-                    # for k in range(1, n + 1):
-                    #     if j == k or i == k:
-                    #         continue
-                    #
-                    #     if k < j:
-                    #         self.stream.write(f"(assert (=> (and arc_{i}_{k} ord_{k}_{j}) forbidden_{i}_{j})))\n")
-                    #     else:
-                    #         self.stream.write(f"(assert (=> (and arc_{i}_{k} (not ord_{j}_{k})) forbidden_{i}_{j})))\n")
                 else:
                     for e in self.hypergraph.incident_edges(i):
-                        # TODO: Ord should be faster as each guess for ordij can reduce clauses containing pos and neg
                         if i < j:
-                            self.stream.write(f"(assert (=> ord_{i}_{j} (not subset_{j}_{i}) (= weight_{j}_e{e} 0)))\n")
+                            self.stream.write(f"(assert (=> (and ord_{i}_{j} (not subset_{j}_{i})) (= weight_{j}_e{e} 0)))\n")
                         else:
-                            self.stream.write(f"(assert (=> (not ord_{j}_{i}) (not subset_{j}_{i}) (= weight_{j}_e{e} 0)))\n")
-
-                    # TODO: This is for some reason faster than directly setting weight. Change this for SAT!
-                    #self.stream.write(f"(assert (=> (and arc_{i}_{j} (not subset_{j}_{i})) forbidden_{i}_{j}))\n")
-
-                # for e in self.hypergraph.incident_edges(i):
-                #     self.stream.write(f"(assert (=> forbidden_{i}_{j} (= weight_{j}_e{e} 0)))\n")
+                            self.stream.write(f"(assert (=> (and (not ord_{j}_{i}) (not subset_{j}_{i})) (= weight_{j}_e{e} 0)))\n")
