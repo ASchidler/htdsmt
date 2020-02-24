@@ -478,12 +478,12 @@ class HtdSmtEncoding:
                     self.stream.write(f"(assert (=> arc_{i}_{j} forbidden_{i}_{j}))\n")
 
                     for k in range(1, n + 1):
-                        if i == k or j == k or k in incident:
+                        if i == k or j == k:
                             continue
                         if j < k:
-                            self.stream.write(f"(assert (=> arc_{i}_{j} ord_{j}_{k} forbidden_{i}_{k}))\n")
+                            self.stream.write(f"(assert (=> (and arc_{i}_{k} (not ord_{k}_{j})) forbidden_{i}_{j}))\n")
                         else:
-                            self.stream.write(f"(assert (=> arc_{i}_{j} (not ord_{k}_{j}) forbidden_{i}_{k}))\n")
+                            self.stream.write(f"(assert (=> (and arc_{i}_{k} ord_{j}_{k}) forbidden_{i}_{j}))\n")
                 else:
                     if i < j:
                         self.stream.write(f"(assert (=> (and ord_{i}_{j} (not subset_{j}_{i})) forbidden_{i}_{j}))\n")
