@@ -434,6 +434,10 @@ class HtdSmtEncoding:
             for j in incident:
                 self.stream.write("(declare-const subset_{}_{} Bool)\n".format(i, j))
 
+            for j in range(1, n+1):
+                if i != j:
+                    self.stream.write("(declare-const forbidden_{}_{} Bool)\n".format(i, j))
+
         for i in range(1, n+1):
             incident = set()
             for e in self.hypergraph.incident_edges(i):
@@ -471,14 +475,20 @@ class HtdSmtEncoding:
                     continue
 
                 if j not in incident:
-                    for e in self.hypergraph.incident_edges(i):
-                        if i < j:
-                            self.stream.write(f"(assert (=> ord_{i}_{j} (= weight_{j}_e{e} 0)))\n")
-                        else:
-                            self.stream.write(f"(assert (=> (not ord_{j}_{i}) (= weight_{j}_e{e} 0)))\n")
+                    self.stream.write(f"(assert (=> arc_{i}_{j} forbidden_{i}_{j}))\n")
+
+                    for k in range(1, n + 1):
+                        if i == k or j == k or k in incident:
+                            continue
+                        self.stream.write(f"(assert (=> forbidden_{i}_{j} arc_{j}_{k} forbidden_{i}_{k}))\n")
                 else:
                     for e in self.hypergraph.incident_edges(i):
                         if i < j:
-                            self.stream.write(f"(assert (=> (and ord_{i}_{j} (not subset_{j}_{i})) (= weight_{j}_e{e} 0)))\n")
+                            self.stream.write(f"(assert (=> (and ord_{i}_{j} (not subset_{j}_{i})) forbidden_{i}_{j}))\n")
                         else:
-                            self.stream.write(f"(assert (=> (and (not ord_{j}_{i}) (not subset_{j}_{i})) (= weight_{j}_e{e} 0)))\n")
+                            self.stream.write(f"(assert (=> (and (not ord_{j}_{i}) (not subset_{j}_{i})) forbidden_{i}_{j}))\n")
+
+                for e in self.hypergraph.incident_edges(i):
+                    for j in range(1, n+1):
+                        if i != j:
+                            self.stream.write(f"(assert (=> forbidden_{i}_{j} (= weight_{j}_e{e} 0)))\n")
