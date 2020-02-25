@@ -15,7 +15,7 @@ class HtdSatEncoding:
         self.arc = {i: {} for i in range(0, n+1)}
         self.ord = {i: {} for i in range(0, n+1)}
         self.weight = {i: {} for i in range(0, n+1)}
-        #self.forbidden = {i: {} for i in range(0, n + 1)}
+        self.forbidden = {i: {} for i in range(0, n + 1)}
         self.subset = {i: {} for i in range(0, n + 1)}
 
     def _add_clause(self, *args):
@@ -60,8 +60,8 @@ class HtdSatEncoding:
                         continue
                     if j in incident:
                         self.subset[i][j] = self._add_var()
-                    # else:
-                    #     self.forbidden[i][j] = self._add_var()
+
+                    self.forbidden[i][j] = self._add_var()
 
     def elimination_ordering(self):
         n = self.hypergraph.number_of_nodes()
@@ -159,11 +159,17 @@ class HtdSatEncoding:
                     continue
 
                 if j not in incident:
-                    for e in self.hypergraph.incident_edges(i):
-                        self._add_clause(-self.ord[i][j], -self.weight[j][e])
+                    self._add_clause(-self.arc[i][j], self.forbidden[i][j])
+                    for k in range(1, n + 1):
+                        if i == k or j == k:
+                            continue
+
+                        self._add_clause(-self.arc[k][j], -self.forbidden[i][k], self.forbidden[i][j])
                 else:
-                    for e in self.hypergraph.incident_edges(i):
-                        self._add_clause(-self.ord[i][j], self.subset[j][i], -self.weight[j][e])
+                    self._add_clause(-self.ord[i][j], self.subset[j][i], -self.forbidden[i][j])
+
+                for e in self.hypergraph.incident_edges(i):
+                    self._add_clause(-self.forbidden[i][j], -self.weight[j][e])
 
     def _encode_cardinality(self, bound):
         """Enforces cardinality constraints. Cardinality of 2-D structure variables must not exceed bound"""
@@ -172,14 +178,7 @@ class HtdSatEncoding:
 
         m = self.hypergraph.num_hyperedges()
         n = self.hypergraph.number_of_nodes()
-        # self.stream.write(f"#variable= {self.varcount} #constraint= {self.hypergraph.number_of_nodes()}\n")
-        # for i in range(1, n+1):
-        #     weights = []
-        #     for e in range(1, m+1):
-        #         weights.append(f"+1 {self.weight[i][e]}")
-        #     self.stream.write(f"{' '.join(weights)} <= {bound};\n")
-        # return
-        # Define counter variables ctr[i][j][l] with 1 <= i <= n, 1 <= j < n, 1 <= l <= min(j, bound)
+
         ctr = [[[self._add_var()
                  for _ in range(0, min(j, bound))]
                 # j has range 0 to n-1. use 1 to n, otherwise the innermost number of elements is wrong

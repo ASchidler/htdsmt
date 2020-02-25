@@ -4,6 +4,7 @@ from lib.htd_validate.htd_validate.utils.hypergraph import Hypergraph
 import networkx as nx
 from itertools import combinations
 
+cnt = 0
 for r, d, f in os.walk(sys.argv[1]):
     for fl in f:
         file = os.path.join(r, fl)
@@ -13,7 +14,6 @@ for r, d, f in os.walk(sys.argv[1]):
             for u, v in combinations(hg.get_edge(e), 2):
                 pg.add_edge(u, v)
 
-        cnt = 0
         if len(pg.nodes) < 2 or not nx.is_connected(pg):
             cmp = nx.connected_components(pg)
             cnt += 1
