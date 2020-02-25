@@ -160,16 +160,20 @@ class HtdSatEncoding:
 
                 if j not in incident:
                     self._add_clause(-self.arc[i][j], self.forbidden[i][j])
-                    for k in range(1, n + 1):
-                        if i == k or j == k:
-                            continue
-
-                        self._add_clause(-self.arc[k][j], -self.forbidden[i][k], self.forbidden[i][j])
                 else:
-                    self._add_clause(-self.ord[i][j], self.subset[j][i], -self.forbidden[i][j])
+                    self._add_clause(-self.ord[i][j], self.forbidden[i][j])
+
+                for k in range(1, n + 1):
+                    if i == k or j == k:
+                        continue
+
+                    self._add_clause(-self.arc[j][k], -self.forbidden[i][j], self.forbidden[i][k])
 
                 for e in self.hypergraph.incident_edges(i):
-                    self._add_clause(-self.forbidden[i][j], -self.weight[j][e])
+                    if j in incident:
+                        self._add_clause(-self.forbidden[i][j], self.subset[j][i], -self.weight[j][e])
+                    else:
+                        self._add_clause(-self.forbidden[i][j], -self.weight[j][e])
 
     def _encode_cardinality(self, bound):
         """Enforces cardinality constraints. Cardinality of 2-D structure variables must not exceed bound"""

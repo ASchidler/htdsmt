@@ -342,7 +342,8 @@ class HtdSmtEncoding:
                     n = q.pop()
                     q.extend(list(htdd.tree.successors(n)))
                     desc = set(nx.descendants(htdd.tree, n))
-                    #omitted = htdd._B(n) - htdd.bags[n]
+
+                    # Omitted intersected with descendants
                     problem = (htdd._B(n) - htdd.bags[n]) & desc
                     while problem:
                         d = problem.pop()
@@ -350,21 +351,12 @@ class HtdSmtEncoding:
                         pth.pop()
                         while pth:
                             c_node = pth.pop()
-
+                            # TODO: How can this happen? Maybe there are unecessary hyperedges in the cover?
+                            # if len(htdd.bags[d] - htdd._B(c_node)) > 0:
+                            #     pass
                             # We know that every bag on the bath from n to d is a subset of d
                             htdd.bags[c_node].update(htdd.bags[d])
                             htdd.hyperedge_function[c_node] = htdd.hyperedge_function[n]
-            #upper_bounds.simplify_decomp(htdd.bags, htdd.tree, htdd.hyperedge_function)
-            # Make sure that every hyperedge actually covers a node
-            # for i in range(1, self.hypergraph.number_of_nodes()+1):
-            #     incident = set()
-            #     for e in self.hypergraph.incident_edges(i):
-            #         incident.update(self.hypergraph.get_edge(e))
-            #
-            #     for e, val in htdd.hyperedge_function[i].items():
-            #         if val == 1:
-            #             if len(set(self.hypergraph.get_edge(e)) & incident) == 0:
-            #                 htdd.hyperedge_function[i][e] = 0
         except RuntimeError:
             pass
         #except KeyError:
@@ -476,19 +468,22 @@ class HtdSmtEncoding:
 
                 if j not in incident:
                     self.stream.write(f"(assert (=> arc_{i}_{j} forbidden_{i}_{j}))\n")
-
-                    for k in range(1, n + 1):
-                        if i == k or j == k:
-                            continue
-
-                        self.stream.write(f"(assert (=> (and arc_{k}_{j} forbidden_{i}_{k}) forbidden_{i}_{j}))\n")
                 else:
                     if i < j:
-                        self.stream.write(f"(assert (=> (and ord_{i}_{j} (not subset_{j}_{i})) forbidden_{i}_{j}))\n")
+                        self.stream.write(f"(assert (=> ord_{i}_{j} forbidden_{i}_{j}))\n")
                     else:
-                        self.stream.write(f"(assert (=> (and (not ord_{j}_{i}) (not subset_{j}_{i})) forbidden_{i}_{j}))\n")
+                        self.stream.write(f"(assert (=> (not ord_{j}_{i}) forbidden_{i}_{j}))\n")
 
-                for e in self.hypergraph.incident_edges(i):
-                    for j in range(1, n+1):
-                        if i != j:
+                for k in range(1, n + 1):
+                    if i == k or j == k:
+                        continue
+
+                    self.stream.write(f"(assert (=> (and arc_{j}_{k} forbidden_{i}_{j}) forbidden_{i}_{k}))\n")
+
+            for e in self.hypergraph.incident_edges(i):
+                for j in range(1, n + 1):
+                    if i != j:
+                        if j not in incident:
                             self.stream.write(f"(assert (=> forbidden_{i}_{j} (= weight_{j}_e{e} 0)))\n")
+                        else:
+                            self.stream.write(f"(assert (=> (and forbidden_{i}_{j} (not subset_{j}_{i}))  (= weight_{j}_e{e} 0)))\n")

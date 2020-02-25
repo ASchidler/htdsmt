@@ -14,7 +14,7 @@ logging.disable(logging.FATAL)
 base_output_path = '/tmp'
 base_output_file = 'slv2'
 
-for i in range(131, 200, 2):
+for i in range(15, 200, 2):
     if i == 18 or i == 20:
         continue
 
