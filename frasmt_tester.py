@@ -12,14 +12,14 @@ logging.disable(logging.FATAL)
 
 # Path and naming scheme for output files
 base_output_path = '/tmp'
-base_output_file = 'slv2'
+base_output_file = 'slv'
 
 for i in range(15, 200, 2):
     if i == 18 or i == 20:
         continue
 
     sys.stdout.write("Instance {}\n".format(i))
-    file = "/home/andre/Downloads/htd-exact-public/htd-exact_{:03d}.hgr".format(i)
+    file = "/home/aschidler/Downloads/htd-exact-public/htd-exact_{:03d}.hgr".format(i)
 
     arcs = None
     ord = None

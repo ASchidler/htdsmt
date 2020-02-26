@@ -438,7 +438,11 @@ class HtdSmtEncoding:
             for j in incident:
                 if i == j:
                     continue
-                self.stream.write(f"(assert (=> subset_{j}_{i} arc_{i}_{j}))\n")
+
+                if i < j:
+                    self.stream.write(f"(assert (=> subset_{j}_{i} ord_{i}_{j}))\n")
+                else:
+                    self.stream.write(f"(assert (=> subset_{j}_{i} (not ord_{j}_{i})))\n")
 
                 for e in self.hypergraph.edges():
                     # = 1 is superior to > 0. Keeping these two clauses separate is faster than (= w1 w2)
@@ -449,8 +453,8 @@ class HtdSmtEncoding:
                 for k in incident:
                     if k == i or k == j:
                         continue
-                    self.stream.write("(assert (=> (and arc_{i}_{k} (not arc_{j}_{k})) (not subset_{i}_{j})))\n"
-                                      .format(i=i, j=j, k=k))
+                    # self.stream.write("(assert (=> (and arc_{i}_{k} (not arc_{j}_{k})) (not subset_{i}_{j})))\n"
+                    #                   .format(i=i, j=j, k=k))
                     # Subset must be true for every bag in the path
                     self.stream.write("(assert (=> (and subset_{k}_{i} arc_{i}_{j} arc_{j}_{k}) "
                                       "subset_{j}_{i}))\n"

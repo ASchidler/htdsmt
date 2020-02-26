@@ -145,7 +145,7 @@ class HtdSatEncoding:
                 for k in incident:
                     if k == i or k == j:
                         continue
-                    self._add_clause(-self.arc[i][k], self.arc[j][k], -self.subset[i][j])
+                    # self._add_clause(-self.arc[i][k], self.arc[j][k], -self.subset[i][j])
                     self._add_clause(-self.arc[i][j], -self.arc[j][k], -self.subset[k][i], self.subset[j][i])
 
         for i in range(1, n + 1):
