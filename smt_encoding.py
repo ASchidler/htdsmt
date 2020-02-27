@@ -444,8 +444,6 @@ class HtdSmtEncoding:
 
                 for e in self.hypergraph.edges():
                     # = 1 is superior to > 0. Keeping these two clauses separate is faster than (= w1 w2)
-                    # The first clause follows by optimality... Grants a great speedup...
-                    # self.stream.write(f"(assert (=> (and subset_{i}_{j} (= weight_{j}_e{e} 0)) (= weight_{i}_e{e} 0)))\n")
                     self.stream.write(f"(assert (=> (and subset_{i}_{j} (= weight_{i}_e{e} 1)) (= weight_{j}_e{e} 1)))\n")
 
                 self.stream.write(f"(assert (=> (not forbidden_{i}_{j}) (not subset_{i}_{j})))\n")
@@ -455,7 +453,7 @@ class HtdSmtEncoding:
                         continue
 
                     # Subset must be true for every bag in the path
-                    self.stream.write(f"(assert (=> (and forbidden_{i}_{j} forbidden_{i}_{k} {tord(j, k)} (not subset_{i}_{j}))"
+                    self.stream.write(f"(assert (=> (and forbidden_{i}_{j} forbidden_{j}_{k} (not subset_{i}_{j}))"
                                       f"(not subset_{i}_{k})))\n")
 
         for i in range(1, n + 1):
