@@ -356,7 +356,7 @@ class HtdSmtEncoding:
                             #     pass
                             # We know that every bag on the bath from n to d is a subset of d
                             htdd.bags[c_node].update(htdd.bags[d])
-                            htdd.hyperedge_function[c_node] = htdd.hyperedge_function[n]
+                            #htdd.hyperedge_function[c_node] = htdd.hyperedge_function[n]
         except RuntimeError:
             pass
         #except KeyError:
@@ -423,11 +423,9 @@ class HtdSmtEncoding:
                 incident.update(self.hypergraph.get_edge(e))
             incident.remove(i)
 
-            for j in incident:
-                self.stream.write("(declare-const subset_{}_{} Bool)\n".format(i, j))
-
             for j in range(1, n+1):
                 if i != j:
+                    self.stream.write("(declare-const subset_{}_{} Bool)\n".format(i, j))
                     self.stream.write("(declare-const forbidden_{}_{} Bool)\n".format(i, j))
 
         for i in range(1, n+1):
@@ -435,7 +433,7 @@ class HtdSmtEncoding:
             for e in self.hypergraph.incident_edges(i):
                 incident.update(self.hypergraph.get_edge(e))
             incident.remove(i)
-            for j in incident:
+            for j in range(1, n+1):
                 if i == j:
                     continue
 
@@ -450,7 +448,7 @@ class HtdSmtEncoding:
                     # self.stream.write(f"(assert (=> (and subset_{i}_{j} (= weight_{j}_e{e} 0)) (= weight_{i}_e{e} 0)))\n")
                     self.stream.write(f"(assert (=> (and subset_{i}_{j} (= weight_{j}_e{e} 1)) (= weight_{i}_e{e} 1)))\n")
 
-                for k in incident:
+                for k in range(1, n+1):
                     if k == i or k == j:
                         continue
                     # self.stream.write("(assert (=> (and arc_{i}_{k} (not arc_{j}_{k})) (not subset_{i}_{j})))\n"
@@ -487,7 +485,4 @@ class HtdSmtEncoding:
             for e in self.hypergraph.incident_edges(i):
                 for j in range(1, n + 1):
                     if i != j:
-                        if j not in incident:
-                            self.stream.write(f"(assert (=> forbidden_{i}_{j} (= weight_{j}_e{e} 0)))\n")
-                        else:
-                            self.stream.write(f"(assert (=> (and forbidden_{i}_{j} (not subset_{j}_{i}))  (= weight_{j}_e{e} 0)))\n")
+                        self.stream.write(f"(assert (=> (and forbidden_{i}_{j} (not subset_{j}_{i}))  (= weight_{j}_e{e} 0)))\n")
