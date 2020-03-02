@@ -127,13 +127,9 @@ class HtdSatEncoding:
         n = self.hypergraph.number_of_nodes()
 
         for i in range(1, n+1):
-            incident = set()
-            for e in self.hypergraph.incident_edges(i):
-                incident.update(self.hypergraph.get_edge(e))
-            incident.remove(i)
             self._add_clause(self.subset[i][i])
 
-            for j in incident:
+            for j in range(1, n+1):
                 if i == j:
                     continue
 
@@ -144,7 +140,7 @@ class HtdSatEncoding:
                     # The first clause follows by optimality... Grants a great speedup...
                     self._add_clause(-self.subset[i][j], -self.weight[j][e], self.weight[i][e])
 
-                for k in incident:
+                for k in range(1, n+1):
                     if k == i or k == j:
                         continue
 
