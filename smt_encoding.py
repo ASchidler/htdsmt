@@ -343,6 +343,12 @@ class HtdSmtEncoding:
                     q.extend(list(htdd.tree.successors(n)))
                     desc = set(nx.descendants(htdd.tree, n))
 
+                    # The case of redundant, not needed hyperedges is not forbidden in the encoding
+                    # for k, v in htdd.hyperedge_function[n].items():
+                    #     if v == 1:
+                    #         if len(htdd.bags[n] & set(self.hypergraph.get_edge(k))) == 0:
+                    #             htdd.hyperedge_function[n][k] = 0
+
                     # Omitted intersected with descendants
                     problem = (htdd._B(n) - htdd.bags[n]) & desc
                     while problem:
@@ -424,12 +430,8 @@ class HtdSmtEncoding:
             incident.remove(i)
 
             for j in range(1, n+1):
-                self.stream.write("(declare-const subset_{}_{} Bool)\n".format(i, j))
                 if i != j:
-                    self.stream.write("(declare-const forbidden_{}_{} Bool)\n".format(i, j))
-
-        def tord(i, j):
-            return f"ord_{i}_{j}" if i < j else f"(not ord_{j}_{i})"
+                    self.stream.write("(declare-const allowed_{}_{} Bool)\n".format(i, j))
 
         for i in range(1, n+1):
             incident = set()
@@ -437,50 +439,28 @@ class HtdSmtEncoding:
                 incident.update(self.hypergraph.get_edge(e))
             incident.remove(i)
 
-            self.stream.write(f"(assert subset_{i}_{i})\n")
             for j in range(1, n+1):
                 if i == j:
                     continue
 
-                for e in self.hypergraph.edges():
-                    # = 1 is superior to > 0. Keeping these two clauses separate is faster than (= w1 w2)
-                    self.stream.write(f"(assert (=> (and subset_{i}_{j} (= weight_{i}_e{e} 1)) (= weight_{j}_e{e} 1)))\n")
+                self.stream.write(f"(assert allowed_{i}_{i})\n")
+                if i < j:
+                    self.stream.write(f"(assert (=> ord_{i}_{j} allowed_{j}_{i}))\n")
+                else:
+                    self.stream.write(f"(assert (=> (not ord_{j}_{i}) allowed_{j}_{i}))\n")
 
-                self.stream.write(f"(assert (=> (not forbidden_{i}_{j}) (not subset_{i}_{j})))\n")
+                for e in self.hypergraph.edges():
+                    # = 1 is superior to > 0 and = 0 is faster
+                    self.stream.write(f"(assert (=> (and arc_{i}_{j} allowed_{i}_{j} (= weight_{i}_e{e} 1)) (= weight_{j}_e{e} 1)))\n")
 
                 for k in range(1, n+1):
                     if j == k or i == k:
                         continue
 
-                    # Subset must be true for every bag in the path
-                    self.stream.write(f"(assert (=> (and forbidden_{i}_{j} forbidden_{j}_{k} (not subset_{i}_{j}))"
-                                      f"(not subset_{i}_{k})))\n")
-
-        for i in range(1, n + 1):
-            incident = set()
-            for e in self.hypergraph.incident_edges(i):
-                incident.update(self.hypergraph.get_edge(e))
-            incident.remove(i)
-
-            for j in range(1, n + 1):
-                if i == j:
-                    continue
-
-                if j not in incident:
-                    self.stream.write(f"(assert (=> arc_{i}_{j} forbidden_{i}_{j}))\n")
-                else:
-                    if i < j:
-                        self.stream.write(f"(assert (=> ord_{i}_{j} forbidden_{i}_{j}))\n")
-                    else:
-                        self.stream.write(f"(assert (=> (not ord_{j}_{i}) forbidden_{i}_{j}))\n")
-
-                for k in range(1, n + 1):
-                    if i == k or j == k:
-                        continue
-
-                    self.stream.write(f"(assert (=> (and arc_{j}_{k} forbidden_{i}_{j}) forbidden_{i}_{k}))\n")
+                    self.stream.write(f"(assert (=> (and arc_{j}_{k} (not allowed_{i}_{j})) (not allowed_{i}_{k})))\n")
+                    self.stream.write(f"(assert (=> (and arc_{i}_{j} arc_{j}_{k} (not arc_{i}_{k})) (not allowed_{i}_{k})))\n")
 
             for e in self.hypergraph.incident_edges(i):
                 for j in range(1, n + 1):
                     if i != j:
-                        self.stream.write(f"(assert (=> (and forbidden_{i}_{j} (not subset_{i}_{j}))  (= weight_{j}_e{e} 0)))\n")
+                        self.stream.write(f"(assert (=> (not allowed_{i}_{j})  (= weight_{j}_e{e} 0)))\n")
