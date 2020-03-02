@@ -15,8 +15,7 @@ class HtdSatEncoding:
         self.arc = {i: {} for i in range(0, n+1)}
         self.ord = {i: {} for i in range(0, n+1)}
         self.weight = {i: {} for i in range(0, n+1)}
-        self.forbidden = {i: {} for i in range(0, n + 1)}
-        self.subset = {i: {} for i in range(0, n + 1)}
+        self.allowed = {i: {} for i in range(0, n + 1)}
 
     def _add_clause(self, *args):
         self.stream.write(' '.join([str(x) for x in args]))
@@ -56,12 +55,10 @@ class HtdSatEncoding:
                 incident.remove(i)
 
                 for j in range(1, n + 1):
-                    self.subset[i][j] = self._add_var()
-
                     if i == j:
                         continue
 
-                    self.forbidden[i][j] = self._add_var()
+                    self.allowed[i][j] = self._add_var()
 
     def elimination_ordering(self):
         n = self.hypergraph.number_of_nodes()
@@ -127,52 +124,25 @@ class HtdSatEncoding:
         n = self.hypergraph.number_of_nodes()
 
         for i in range(1, n+1):
-            incident = set()
-            for e in self.hypergraph.incident_edges(i):
-                incident.update(self.hypergraph.get_edge(e))
-            incident.remove(i)
-            self._add_clause(self.subset[i][i])
 
-            for j in incident:
+            for j in range(1, n+1):
                 if i == j:
                     continue
 
-                self._add_clause(self.forbidden[i][j], -self.subset[j][i])
+                # This clause is not required, but may speed things up (?)
+                self._add_clause(-self.ord[i][j], self.allowed[j][i])
 
                 for e in self.hypergraph.edges():
-                    # = 1 is superior to > 0. Keeping these two clauses separate is faster than (= w1 w2)
-                    # The first clause follows by optimality... Grants a great speedup...
-                    self._add_clause(-self.subset[i][j], -self.weight[j][e], self.weight[i][e])
+                    self._add_clause(-self.arc[i][j], -self.allowed[i][j], -self.weight[i][e], self.weight[j][e])
 
-                for k in incident:
+                for k in range(1, n+1):
                     if k == i or k == j:
                         continue
-
-                    self._add_clause(-self.forbidden[i][j], -self.forbidden[j][k], self.subset[i][j], -self.subset[i][k])
-
-        for i in range(1, n + 1):
-            incident = set()
-            for e in self.hypergraph.incident_edges(i):
-                incident.update(self.hypergraph.get_edge(e))
-            incident.remove(i)
-
-            for j in range(1, n + 1):
-                if i == j:
-                    continue
-
-                if j not in incident:
-                    self._add_clause(-self.arc[i][j], self.forbidden[i][j])
-                else:
-                    self._add_clause(-self.ord[i][j], self.forbidden[i][j])
-
-                for k in range(1, n + 1):
-                    if i == k or j == k:
-                        continue
-
-                    self._add_clause(-self.arc[j][k], -self.forbidden[i][j], self.forbidden[i][k])
+                    self._add_clause(-self.arc[j][k], self.allowed[i][j], -self.allowed[i][k])
+                    self._add_clause(-self.arc[i][j], -self.arc[j][k], self.arc[i][k], -self.allowed[i][k])
 
                 for e in self.hypergraph.incident_edges(i):
-                    self._add_clause(-self.forbidden[i][j], self.subset[j][i], -self.weight[j][e])
+                    self._add_clause(self.allowed[i][j], -self.weight[j][e])
 
     def _encode_cardinality(self, bound):
         """Enforces cardinality constraints. Cardinality of 2-D structure variables must not exceed bound"""

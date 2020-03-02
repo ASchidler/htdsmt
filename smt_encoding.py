@@ -424,26 +424,15 @@ class HtdSmtEncoding:
     def encode_htd2(self, n):
         # # Whenever a tree node covers an edge, it covers all of the edge's vertices
         for i in range(1, n+1):
-            incident = set()
-            for e in self.hypergraph.incident_edges(i):
-                incident.update(self.hypergraph.get_edge(e))
-            incident.remove(i)
-
             for j in range(1, n+1):
                 if i != j:
                     self.stream.write("(declare-const allowed_{}_{} Bool)\n".format(i, j))
 
         for i in range(1, n+1):
-            incident = set()
-            for e in self.hypergraph.incident_edges(i):
-                incident.update(self.hypergraph.get_edge(e))
-            incident.remove(i)
-
             for j in range(1, n+1):
                 if i == j:
                     continue
 
-                self.stream.write(f"(assert allowed_{i}_{i})\n")
                 if i < j:
                     self.stream.write(f"(assert (=> ord_{i}_{j} allowed_{j}_{i}))\n")
                 else:
