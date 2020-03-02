@@ -56,10 +56,10 @@ class HtdSatEncoding:
                 incident.remove(i)
 
                 for j in range(1, n + 1):
+                    self.subset[i][j] = self._add_var()
+
                     if i == j:
                         continue
-                    if j in incident:
-                        self.subset[i][j] = self._add_var()
 
                     self.forbidden[i][j] = self._add_var()
 
@@ -131,11 +131,13 @@ class HtdSatEncoding:
             for e in self.hypergraph.incident_edges(i):
                 incident.update(self.hypergraph.get_edge(e))
             incident.remove(i)
+            self._add_clause(self.subset[i][i])
+
             for j in incident:
                 if i == j:
                     continue
 
-                self._add_clause(-self.subset[j][i], self.arc[i][j])
+                self._add_clause(self.forbidden[i][j], -self.subset[j][i])
 
                 for e in self.hypergraph.edges():
                     # = 1 is superior to > 0. Keeping these two clauses separate is faster than (= w1 w2)
@@ -145,8 +147,8 @@ class HtdSatEncoding:
                 for k in incident:
                     if k == i or k == j:
                         continue
-                    # self._add_clause(-self.arc[i][k], self.arc[j][k], -self.subset[i][j])
-                    self._add_clause(-self.arc[i][j], -self.arc[j][k], -self.subset[k][i], self.subset[j][i])
+
+                    self._add_clause(-self.forbidden[i][j], -self.forbidden[j][k], self.subset[i][j], -self.subset[i][k])
 
         for i in range(1, n + 1):
             incident = set()
@@ -170,10 +172,7 @@ class HtdSatEncoding:
                     self._add_clause(-self.arc[j][k], -self.forbidden[i][j], self.forbidden[i][k])
 
                 for e in self.hypergraph.incident_edges(i):
-                    if j in incident:
-                        self._add_clause(-self.forbidden[i][j], self.subset[j][i], -self.weight[j][e])
-                    else:
-                        self._add_clause(-self.forbidden[i][j], -self.weight[j][e])
+                    self._add_clause(-self.forbidden[i][j], self.subset[j][i], -self.weight[j][e])
 
     def _encode_cardinality(self, bound):
         """Enforces cardinality constraints. Cardinality of 2-D structure variables must not exceed bound"""
