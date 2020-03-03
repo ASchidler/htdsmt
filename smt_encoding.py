@@ -433,20 +433,24 @@ class HtdSmtEncoding:
                 if i == j:
                     continue
 
+                # These clauses are not strictly necessary, but makes the solving faster
                 if i < j:
                     self.stream.write(f"(assert (=> ord_{i}_{j} allowed_{j}_{i}))\n")
                 else:
                     self.stream.write(f"(assert (=> (not ord_{j}_{i}) allowed_{j}_{i}))\n")
 
+                # Enforce subsets in arc-successors
                 for e in self.hypergraph.edges():
-                    # = 1 is superior to > 0 and = 0 is faster
-                    self.stream.write(f"(assert (=> (and arc_{i}_{j} allowed_{i}_{j} (= weight_{i}_e{e} 1)) (= weight_{j}_e{e} 1)))\n")
+                    # = 1 is superior to > 0 and = 0 is even faster
+                    self.stream.write(f"(assert (or (not arc_{i}_{j}) (not allowed_{i}_{j}) (= weight_{i}_e{e} 0) (= weight_{j}_e{e} 1)))\n")
 
                 for k in range(1, n+1):
                     if j == k or i == k:
                         continue
 
+                    # Subset condition must hold along the whole arc-path
                     self.stream.write(f"(assert (=> (and arc_{j}_{k} (not allowed_{i}_{j})) (not allowed_{i}_{k})))\n")
+                    # Arc-paths are only possible among successors of i, if farther away -> forbidden
                     self.stream.write(f"(assert (=> (and arc_{i}_{j} arc_{j}_{k} (not arc_{i}_{k})) (not allowed_{i}_{k})))\n")
 
             for e in self.hypergraph.incident_edges(i):
