@@ -12,7 +12,7 @@ logging.disable(logging.FATAL)
 
 # Path and naming scheme for output files
 base_output_path = '/tmp'
-base_output_file = 'slv'
+base_output_file = 'slv3'
 
 for i in range(15, 200, 2):
     if i == 18 or i == 20:

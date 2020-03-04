@@ -422,6 +422,10 @@ class HtdSmtEncoding:
         return ret
 
     def encode_htd2(self, n):
+        def tord(p, q):
+            return 'ord_{p}_{q}'.format(p=p, q=q) if p < q \
+            else '(not ord_{q}_{p})'.format(p=p, q=q)
+
         # # Whenever a tree node covers an edge, it covers all of the edge's vertices
         for i in range(1, n+1):
             for j in range(1, n+1):
@@ -434,15 +438,13 @@ class HtdSmtEncoding:
                     continue
 
                 # These clauses are not strictly necessary, but makes the solving faster
-                if i < j:
-                    self.stream.write(f"(assert (=> ord_{i}_{j} allowed_{j}_{i}))\n")
-                else:
-                    self.stream.write(f"(assert (=> (not ord_{j}_{i}) allowed_{j}_{i}))\n")
+                self.stream.write(f"(assert (=> {tord(i, j)} allowed_{j}_{i}))\n")
 
                 # Enforce subsets in arc-successors
                 for e in self.hypergraph.edges():
-                    # = 1 is superior to > 0 and = 0 is even faster
-                    self.stream.write(f"(assert (or (not arc_{i}_{j}) (not allowed_{i}_{j}) (= weight_{i}_e{e} 0) (= weight_{j}_e{e} 1)))\n")
+                    # = 1 is superior to > 0. = 0 and = 1 (i.e. express it as or vs. =>) does have an impact on performance
+                    # none is superior, it depends on the instance...
+                    self.stream.write(f"(assert (=> (and arc_{i}_{j} allowed_{i}_{j} (= weight_{i}_e{e} 1)) (= weight_{j}_e{e} 1)))\n")
 
                 for k in range(1, n+1):
                     if j == k or i == k:
