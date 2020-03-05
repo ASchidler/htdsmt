@@ -3,7 +3,7 @@ from __future__ import absolute_import
 import sys
 import logging
 import time
-import frasmt_solver as solver
+import smt_solver as solver
 from lib.htd_validate.htd_validate.decompositions import GeneralizedHypertreeDecomposition
 
 # End of imports
@@ -12,9 +12,9 @@ logging.disable(logging.FATAL)
 
 # Path and naming scheme for output files
 base_output_path = '/tmp'
-base_output_file = 'slv'
+base_output_file = 'slv3'
 
-for i in range(1, 200, 2):
+for i in range(15, 200, 2):
     if i == 18 or i == 20:
         continue
 
@@ -28,7 +28,7 @@ for i in range(1, 200, 2):
     bags = None
     res = None
 
-    for htd in [False, None, True]:
+    for htd in [False, True]:
         # Create encoding of the instance
         before_tm = time.time()
 
@@ -36,8 +36,11 @@ for i in range(1, 200, 2):
             res = solver.solve(base_output_path, base_output_file, file, htd=True, arcs=arcs, sb=False,
                                fix_val=last_val, timeout=900)
         elif htd is not None:
+            # This uses the previous result as a lower bound for the htd encoding, good to test portfolio approach
+            # bad to compare
             lb = None if res is None else res.size
-            res = solver.solve(base_output_path, base_output_file, file, htd=htd, sb=htd, timeout=900, lb=lb)
+
+            res = solver.solve(base_output_path, base_output_file, file, htd=htd, sb=False, timeout=900, lb=None, heuristic_repair=False)
             if htd is None:
                 htd = True
 
