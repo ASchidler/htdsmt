@@ -1,12 +1,11 @@
 import argparse
-import io
 import subprocess
-import sys
 import os
 import time
-
+from shutil import which
+from lib.htd_validate.htd_validate.utils.hypergraph import Hypergraph
 import bounds.upper_bounds as bnd
-from lib.htd_validate.htd_validate.utils import Hypergraph
+
 from sat_encoding import HtdSatEncoding
 
 parser = argparse.ArgumentParser(description='Calculate the hypertree decomposition for a given hypergraph')
@@ -14,12 +13,25 @@ parser.add_argument('graph', metavar='graph_file', type=str,
                    help='The input file containing the hypergraph')
 parser.add_argument('-g', dest='ghtd', action='store_true', default=False,
                     help='Compute a GHTD instead of a HTD')
+parser.add_argument('-d', dest='tmp_dir', default='/tmp', help='Path for temporary files, defaults to /tmp')
 
-tmp_dir = "/tmp"
+parser.add_argument('-s', dest="solver", default='glucose', help='The solver to use')
+
+args = parser.parse_args()
+tmp_dir = args.tmp_dir
 if "TMPDIR" in os.environ:
     tmp_dir = os.environ['TMPDIR']
 
-args = parser.parse_args()
+# The solver to use
+solver = 'glucose'
+
+# Executable is in path
+executable = None
+if which(solver) is not None:
+    executable = solver
+else:
+    executable = os.path.join(os.path.dirname(os.path.realpath(__file__)), solver)
+
 
 input_file = args.graph
 hypergraph_in = Hypergraph.from_file(input_file, fischl_format=False)
@@ -45,7 +57,7 @@ while known_lb is None or known_ub is None or known_lb != known_ub:
 
     with open(tmpout, "w") as outf:
         #p1 = subprocess.Popen(['./lingeling', "-q", "--witness", tmpin], stdout=outf)
-        p1 = subprocess.Popen(['./glucose', '-verb=0', tmpin, tmpout])
+        p1 = subprocess.Popen([executable, "-verb=0", tmpin, tmpout])
         #p1 = subprocess.Popen(['minisat', '-verb=0', tmpin, tmpout])
     error_str = None
 
