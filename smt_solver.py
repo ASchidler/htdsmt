@@ -10,13 +10,8 @@ from itertools import combinations
 
 """Starts the correct solver and returns the solver result"""
 
-import bounds.upper_bounds as ubs
-import bounds.lower_bounds as lbs
-import weighted.weight_upper_bound as wub
 
-
-def solve(output_path, output_name, input_file, clique_mode=0, htd=True, lb=None, arcs=None, order=None, fix_val=None,
-          sb=True, timeout=0, heuristic_repair=True, weighted=False):
+def solve(output_path, output_name, input_file, clique_mode=0, htd=True, lb=None,  fix_val=None, timeout=0):
 
     # Open output files, these are used to interface with the solver
     base_path = os.path.join(output_path, output_name)
@@ -26,13 +21,13 @@ def solve(output_path, output_name, input_file, clique_mode=0, htd=True, lb=None
 
     # Load graph. There is no working auto detect of encoding, so try both options
     hypergraph_in = Hypergraph.from_file(input_file, fischl_format=False)
-    hypergraph2 = Hypergraph.from_file(input_file, fischl_format=True, weighted=weighted)
+    hypergraph2 = Hypergraph.from_file(input_file, fischl_format=True)
 
     if hypergraph_in is None or (hypergraph2 is not None and len(hypergraph2.edges()) > len(hypergraph_in.edges())):
         hypergraph_in = hypergraph2
 
     hypergraph = hypergraph_in
-    reverse_mapping = None
+
     # Find clique if requested
     clique = None
     if clique_mode > 0:
@@ -56,10 +51,8 @@ def solve(output_path, output_name, input_file, clique_mode=0, htd=True, lb=None
     #     ub = ubs.greedy(hypergraph, htd) if not weighted else wub.greedy(hypergraph)
     #     print(ub)
     enc = smt_encoding.HtdSmtEncoding(hypergraph, stream=inpf)
-    enc.solve(htd=htd, fix_val=fix_val, order=order, arcs=arcs,
-              sb=sb, clique=clique, lb=lb, ub=ub, weighted=weighted)
-    # enc = frasmt_encoding2.FraSmtSolver(hypergraph, stream=inpf, checker_epsilon=None)
-    # enc.solve(htd=htd)
+    enc.solve(htd=htd, fix_val=fix_val, clique=clique, lb=lb, ub=ub)
+
     inpf.seek(0)
 
     # Find and start solver, either in path or current directory
@@ -84,57 +77,8 @@ def solve(output_path, output_name, input_file, clique_mode=0, htd=True, lb=None
 
     # Load the resulting model
     try:
-        res = enc.decode(outp, False, htd=htd, repair=heuristic_repair, weighted=weighted)
+        res = enc.decode(outp, False, htd=htd)
     except ValueError as ee:
         raise ee
 
-    if reverse_mapping:
-        remap(res, reverse_mapping, hypergraph_in)
-
     return res
-
-
-def check_hypergraph_continuity(hg):
-    """Checks if the vertices are a continuous list of nodes, if not it is remapped"""
-
-    found = False
-    for i in range(1, hg.number_of_nodes() + 1):
-        if i in hg.nodes():
-            found = True
-            break
-
-    # If the list of vertices is continuous, nothing to do
-    if not found:
-        return hg, None
-
-    # Create mapping
-    mapping = dict()
-    reverse_mapping = dict()
-    nodes = list(hg.nodes())
-
-    for i in range(1, len(nodes)+1):
-        mapping[nodes[i-1]] = i
-        reverse_mapping[i] = nodes[i-1]
-
-    hypergraph = Hypergraph()
-
-    for k, e in hg.edges().items():
-        new_e = [mapping[x] for x in e]
-        hypergraph.add_hyperedge(new_e, edge_id=k, weight=None if hg.weights() is None else hg.weights()[k])
-
-    return hypergraph, reverse_mapping
-
-
-def remap(result, reverse_mapping, original):
-    """Given a mapping for the vertices, maps the result back to the original graph"""
-
-    result.ordering = [reverse_mapping[x] for x in result.ordering]
-    result.arcs = {reverse_mapping[n1]:
-        {reverse_mapping[n2]: v2 for n2, v2 in v1.items()}
-        for n1, v1 in result.arcs.items()}
-
-    result.weights = {}
-    for k in result.decomposition.bags.keys():
-        result.decomposition.bags[k] = {reverse_mapping[x] for x in result.decomposition.bags[k]}
-
-    result.decomposition.hypergraph = original

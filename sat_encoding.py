@@ -201,7 +201,7 @@ class HtdSatEncoding:
             self.encode_htd()
         self.cover()
         self._encode_cardinality(ub)
-        #self.break_order_symmetry()
+
         # Fill in correct header
         self.stream.seek(0)
         real_header = f"p cnf {self.varcount} {self.clausecount}"
@@ -259,40 +259,3 @@ class HtdSatEncoding:
             width = max(width, cwidth)
 
         return width
-
-    def break_order_symmetry(self):
-        n = self.hypergraph.number_of_nodes()
-
-        def tord(ix, jx):
-            return 'ord_{}_{}'.format(ix, jx) if ix < jx else '(not ord_{}_{})'.format(jx, ix)
-
-        block = [None for _ in range(0, n+1)]
-        for i in range(1, n+1):
-            d = dict()
-            block[i] = d
-            for j in range(i+1, n+1):
-                d[j] = [None for _ in range(0, n + 1)]
-                for k in range(1, n + 1):
-                    if i == k or j == k:
-                        continue
-                    d[j][k] = self._add_var()
-
-        for i in range(1, n+1):
-            for j in range(i+1, n+1):
-                for k in range(1, n + 1):
-                    if i == k or j == k:
-                        continue
-
-                    self._add_clause(-self.ord[j][k], -self.arc[k][i], block[i][j][k])
-                    self._add_clause(-block[i][j][k], self.ord[j][k])
-                    self._add_clause(-block[i][j][k], self.arc[k][i])
-                    # self.stream.write(
-                    #     f"(assert (or (not {tord(j, k)}) (not arc_{k}_{i}) block_{i}_{j}_{k}))\n"
-                    # )
-                    # self.stream.write(
-                    #     "(assert (or (not block_{i}_{j}_{k}) {ord}))\n"
-                    #         .format(i=i, j=j, k=k, ord=tord(j, k)))
-                    #
-                    # self.stream.write(
-                    #     "(assert (or (not block_{i}_{j}_{k}) arc_{k}_{i}))\n"
-                    #         .format(i=i, j=j, k=k))
