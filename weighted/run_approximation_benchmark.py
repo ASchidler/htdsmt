@@ -23,3 +23,4 @@ for bb, i in ((x, y) for x in [False, True] for y in range(1, weighted_instances
     weight1 = wub.greedy(hypergraph_in, bb=bb)
 
     print(f"Heuristisc WGHTW{i}: BB: {bb} {weight1} in {time.time() - tm_start}")
+    sys.stdout.flush()

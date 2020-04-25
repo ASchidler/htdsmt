@@ -30,14 +30,17 @@ def greedy(instance, bb=True, cfirst=True):
 
     c = max(sum(v for e, v in entries.items() if v > 0 and e in instance.c_edges) for entries in edge_cover.values())
     if bb:
-        def bndf(nl, vl):
+        def bndf(cfirst, nl, vl):
             """Calculates the bounds for a bag, used for branch and bound"""
             wl = sum(x for x in vl.values())
             cl = sum(x for el, x in vl.items() if x > 0 and el in instance.c_edges)
-            return wl, cl
+            if cfirst:
+                return cl, wl
+            else:
+                return wl, cl
 
         ub.bandb(instance, bags, edge_cover, subcall=lambda b, edges, cub: bandb_sub(instance, b, edges, cub, cfirst),
-                 boundcall=bndf)
+                boundcall=lambda x,y: bndf(cfirst, x, y))
 
         c = max(
             sum(v for e, v in entries.items() if v > 0 and e in instance.c_edges) for entries in edge_cover.values())
@@ -93,9 +96,7 @@ def bandb_sub(instance, b, edges, ub, cfirst=True):
 
     q = [(b, 0, 0, -1, False, [])]
 
-    ub_w, ub_c = ub
-    best_c = ub_c
-    best_w = ub_w
+    best = ub
     best_list = None
 
     while q:
@@ -118,8 +119,8 @@ def bandb_sub(instance, b, edges, ub, cfirst=True):
                 c_c = c_c + 1
 
             # Exceed upper bound -> suboptimal
-            if (cfirst and (c_c > best_c or (c_c == best_c and c_w >= best_w))) or \
-                    (not cfirst and (c_w > best_w or (c_w == best_w and c_c >= best_c))):
+            cresult = (c_c, c_w) if cfirst else (c_w, c_c)
+            if cresult >= best:
                 continue
 
             b = b - ed
@@ -129,8 +130,7 @@ def bandb_sub(instance, b, edges, ub, cfirst=True):
 
             # Found a solution, store (we already know it's better than best from above)
             if len(b) == 0:
-                best_w = c_w
-                best_c = c_c
+                best = cresult
                 best_list = e_list
 
         # "Subcalls"
@@ -138,7 +138,7 @@ def bandb_sub(instance, b, edges, ub, cfirst=True):
         q.append((b, c_w, c_c, pos + 1, True, e_list))
 
     # Return result if better has been found, otherwise return default value
-    if best_w < ub_w or best_c < ub_c:
-        return best_w, best_list
+    if best < ub:
+        return best, best_list
 
     return None
