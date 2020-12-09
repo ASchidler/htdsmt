@@ -1,14 +1,20 @@
 from itertools import combinations
+from pysat.formula import IDPool, CNF
+from pysat.card import ITotalizer, CardEnc, EncType
+from lib.htd_validate.htd_validate.decompositions import HypertreeDecomposition
+from decomposition_result import DecompositionResult
+from functools import cmp_to_key
+import networkx as nx
 
 
 class HtdSatEncoding:
-    def __init__(self, stream, hypergraph):
+    def __init__(self, hypergraph):
         self.varcount = 0
         self.varmap = {}
         self.varrevmap = {}
-        self.stream = stream
-        self.clausecount = 0
         self.hypergraph = hypergraph
+        self.formula = CNF()
+        self.pool = IDPool()
 
         n = self.hypergraph.number_of_nodes()
 
@@ -18,13 +24,7 @@ class HtdSatEncoding:
         self.allowed = {i: {} for i in range(0, n + 1)}
 
     def _add_clause(self, *args):
-        self.stream.write(' '.join([str(x) for x in args]))
-        self.stream.write(" 0\n")
-        self.clausecount += 1
-
-    def _add_var(self):
-        self.varcount += 1
-        return self.varcount
+        self.formula.append([x for x in args])
 
     def _init_vars(self, htd):
         n = self.hypergraph.number_of_nodes()
@@ -33,19 +33,19 @@ class HtdSatEncoding:
         # ordering
         for i in range(1, n + 1):
             for j in range(i + 1, n + 1):
-                self.ord[i][j] = self._add_var()
+                self.ord[i][j] = self.pool.id(f"ord{i}_{j}")
                 self.ord[j][i] = -1 * self.ord[i][j]
 
         # arcs
         for i in range(1, n + 1):
             for j in range(1, n + 1):
                 # declare arc_ij variables
-                self.arc[i][j] = self._add_var()
+                self.arc[i][j] = self.pool.id(f"arc{i}_{j}")
 
         # weights
         for j in range(1, n + 1):
             for ej in range(1, m + 1):
-                self.weight[j][ej] = self._add_var()
+                self.weight[j][ej] = self.pool.id(f"weight{j}_{ej}")
 
         if htd:
             for i in range(1, n + 1):
@@ -58,7 +58,7 @@ class HtdSatEncoding:
                     if i == j:
                         continue
 
-                    self.allowed[i][j] = self._add_var()
+                    self.allowed[i][j] = self.pool.id(f"allowed{i}_{j}")
 
     def elimination_ordering(self):
         n = self.hypergraph.number_of_nodes()
@@ -144,118 +144,125 @@ class HtdSatEncoding:
                 for e in self.hypergraph.incident_edges(i):
                     self._add_clause(self.allowed[i][j], -self.weight[j][e])
 
-    def _encode_cardinality(self, bound):
-        """Enforces cardinality constraints. Cardinality of 2-D structure variables must not exceed bound"""
-        # Counter works like this: ctr[i][j][0] states that an arc from i to j exists
-        # These are then summed up incrementally edge by edge
+    def _encode_cardinality(self, ub, m, n):
+        tots = []
+        for i in range(1, n+1):
+            lits = [self.weight[i][ej] for ej in range(1, m+1)]
+            ubound = min(len(lits)-1, ub)
 
-        m = self.hypergraph.num_hyperedges()
-        n = self.hypergraph.number_of_nodes()
+            tots.append(ITotalizer(lits=lits, ubound=ubound, top_id=self.pool.id(f"totalizer{i}")))
+            self.pool.occupy(self.pool.top - 1, tots[-1].top_id)
+            self.formula.extend(tots[-1].cnf)
 
-        ctr = [[[self._add_var()
-                 for _ in range(0, min(j, bound))]
-                # j has range 0 to n-1. use 1 to n, otherwise the innermost number of elements is wrong
-                for j in range(1, m)]
-               for _ in range(0, n)]
+        return tots
 
-        # Note that these vars are 0 based, while weight is 1 based, so add 1 to all indices when using weight
-        for i in range(0, n):
-            for j in range(1, m - 1):
-                # Ensure that the counter never decrements, i.e. ensure carry over
-                for ln in range(0, min(len(ctr[i][j - 1]), bound)):
-                    self._add_clause(-ctr[i][j - 1][ln],  ctr[i][j][ln])
-                    #self._add_clause( ctr[i][j - 1][ln], -ctr[i][j][ln], self.weight[i + 1][j + 1])
-
-                # Increment counter for each arc
-                for ln in range(1, min(len(ctr[i][j]), bound)):
-                    self._add_clause(-ctr[i][j - 1][ln - 1],  ctr[i][j][ln], -self.weight[i+1][j+1])
-                    #self._add_clause( ctr[i][j - 1][ln - 1], -ctr[i][j][ln])
-
-        # Ensure that counter is initialized on the first arc
-        for i in range(0, n):
-            for j in range(0, m - 1):
-                self._add_clause(-self.weight[i+1][j+1], ctr[i][j][0])
-
-        # Conflict if target is exceeded
-        for i in range(0, n):
-            for j in range(bound, m):
-                # Since we start to count from 0, bound - 2
-                self._add_clause(-self.weight[i+1][j+1], -ctr[i][j - 1][bound - 1])
-
-    def encode(self, ub, htd):
+    def solve(self, ub, htd, solver, incremental=True, enc_type=0):
         n = self.hypergraph.number_of_nodes()
         m = self.hypergraph.number_of_edges()
         self._init_vars(htd)
-
-        # Write header placeholder
-        estimated_vars = (1 + ub) * self.varcount
-        # This is way too much, but better too many than too few: m * n^4 * 100
-        estimated_clauses = 100 * m * n * n * n * n
-        placeholder = f"p cnf {estimated_vars} {estimated_clauses}"
-        self.stream.write(placeholder)
-        self.stream.write("\n")
 
         # Create Encoding
         self.elimination_ordering()
         if htd:
             self.encode_htd()
         self.cover()
-        self._encode_cardinality(ub)
+        c_bound = ub
+        increase = False
+        c_lb = 0
 
-        # Fill in correct header
-        self.stream.seek(0)
-        real_header = f"p cnf {self.varcount} {self.clausecount}"
-        self.stream.seek(0)
-        self.stream.write(real_header)
-        for _ in range(len(real_header), len(placeholder)):
-            self.stream.write(" ")
+        if incremental:
+            tots = self._encode_cardinality(ub, m, n)
+            with solver() as slv:
+                slv.append_formula(self.formula)
 
-    def decode(self, inp):
-        first_line = inp.readline().lower()
-        is_unsat = first_line.startswith("unsat") or first_line.startswith("s unsat")
+                while True:
+                    if increase:
+                        for c_tot in tots:
+                            if len(c_tot.lits) > c_bound:
+                                c_tot.increase(ubound=c_bound, top_id=self.pool.id(f"tots_{self.pool.top}"))
+                                slv.append_formula(c_tot.cnf.clauses[-c_tot.nof_new:])
+                                self.pool.occupy(self.pool.top - 1, tots[-1].top_id)
 
-        if is_unsat:
-            return None
+                    assps = [-t.rhs[c_bound] for t in tots if c_bound < len(t.lits)]
+                    if slv.solve(assumptions=assps):
+                        c_bound -= 1
+                        if c_lb == c_bound:
+                            return self.decode(slv.get_model(), htd, m, n)
+                    else:
+                        c_lb = c_bound
+                        c_bound += 1
+                        increase = True
+        else:
+            while True:
+                with solver() as slv:
+                    slv.append_formula(self.formula)
+                    c_top = self.pool.top
+                    for i in range(1, n + 1):
+                        lits = [self.weight[i][ej] for ej in range(1, m + 1)]
 
-        # glucose does not write sat/unsat in the first line... first char could also be a -, so check first and second
-        if first_line[0].isdigit() or first_line[1].isdigit():
-            inp.seek(0)
+                        if len(lits) > c_bound:
+                            constr = CardEnc.atmost(lits, bound=c_bound, top_id=c_top, encoding=enc_type)
+                            c_top = constr.nv
+                            slv.append_formula(constr)
 
-        # We could also filter only interesting vars, if necessary
-        # We could also make this a list...
-        model = {}
-        buffer = []
+                    if slv.solve():
+                        c_bound -= 1
+                        if c_lb == c_bound:
+                            return self.decode(slv.get_model(), htd, m, n)
+                    else:
+                        c_lb = c_bound
+                        c_bound += 1
 
-        def buffer_val():
-            str_val = ''.join(buffer)
-            if str_val.strip() != "":
-                val = int(str_val)
-                if val < 0:
-                    model[-1 * val] = False
-                else:
-                    model[val] = True
+    def decode(self, model, htd, m, n):
+        model = {abs(x): x > 0 for x in model}
+        ordering = list(range(1, n + 1))
 
-        while inp.readable():
-            cc = inp.read(1)
-            if cc == ' ' or cc == "\n":
-                buffer_val()
-                buffer.clear()
-            elif cc == "v":
-                pass
-            elif cc == "":
-                break
+        def find_ord(x, y):
+            if x < y:
+                return -1 if model[self.ord[x][y]] else 1
             else:
-                buffer.append(cc)
-        buffer_val()
+                return 1 if model[self.ord[y][x]] else -1
+        ordering.sort(key=cmp_to_key(find_ord))
 
-        # Find weight
-        width = 0
+        weights = {x: {ej: 1 if model[self.weight[x][ej]] else 0 for ej in range(1, m+1)} for x in range(1, n+1)}
+        arcs = {x: {y: model[self.arc[x][y]] for y in range(1, n+1)} for x in range(1, n+1)}
 
-        for j in range(1, self.hypergraph.number_of_nodes() + 1):
-            cwidth = 0
-            for ej in range(1, self.hypergraph.number_of_edges() + 1):
-                if model[self.weight[j][ej]]:
-                    cwidth += 1
-            width = max(width, cwidth)
+        htdd = HypertreeDecomposition.from_ordering(hypergraph=self.hypergraph, ordering=ordering,
+                                                    weights=weights)
 
-        return width
+        if htd:
+            for i in range(1, self.hypergraph.number_of_nodes() + 1):
+                for j in range(1, self.hypergraph.number_of_nodes() + 1):
+                    if i != j and arcs[i][j]:
+                        htdd.bags[i].add(j)
+
+            htdd.tree = nx.DiGraph()
+            for i in range(0, len(ordering)):
+                n = ordering[i]
+                for j in range(i + 1, len(ordering)):
+                    v = ordering[j]
+                    if arcs[n][v]:
+                        htdd.tree.add_edge(v, n)
+                        break
+
+            # TODO: This is really inefficient
+            root = [n for n in htdd.tree.nodes if len(list(htdd.tree.predecessors(n))) == 0][0]
+            q = [root]
+            while q:
+                n = q.pop()
+                q.extend(list(htdd.tree.successors(n)))
+                desc = set(nx.descendants(htdd.tree, n))
+
+                # Omitted intersected with descendants
+                problem = (htdd._B(n) - htdd.bags[n]) & desc
+                while problem:
+                    d = problem.pop()
+                    pth = nx.shortest_path(htdd.tree, source=n, target=d)
+                    pth.pop()
+                    while pth:
+                        c_node = pth.pop()
+
+                        # We know that every bag on the bath from n to d is a subset of d
+                        htdd.bags[c_node].update(htdd.bags[d])
+
+        return DecompositionResult(htdd.width(), htdd, arcs, ordering, weights)
