@@ -155,14 +155,42 @@ class HtdSatEncoding:
             self.formula.extend(tots[-1].cnf)
 
         return tots
+    # TODO: Can we use the clique heuristic for HTD, just not put it at the top?
+    def _symmetry_breaking(self, n):
+        ls = {x: self.pool.id(f"ls{x}") for x in range(1, n+1)}
+        s = {x: {} for x in range(1, n+1)}
+        for v in s.keys():
+            s[v] = {x: self.pool.id(f"s{v}_{x}") for x in range(1, n+1) if v != x}
 
-    def solve(self, ub, htd, solver, incremental=True, enc_type=0):
+        self.formula.extend(CardEnc.atmost(ls.values(), vpool=self.pool))
+
+        for i in range(1, n+1):
+            for j in range(i+1, n+1):
+                for k in range(1, n+1):
+                    if i != k and j != k:
+                        self.formula.append([self.ord[j][i], self.ord[k][j], -s[i][k]])
+
+        for i in range(1, n+1):
+            clause = [ls[i]]
+            nbs = self.hypergraph.adjByNode(i, strict=True).keys()
+
+            for j in nbs:
+                clause.append(s[i][j])
+                for k in nbs:
+                    if j != k:
+                        self.formula.append([-self.ord[j][k], -s[i][k]])
+
+            self.formula.append(clause)
+
+    def solve(self, ub, htd, solver, incremental=True, enc_type=0, sb=False):
         n = self.hypergraph.number_of_nodes()
         m = self.hypergraph.number_of_edges()
         self._init_vars(htd)
 
         # Create Encoding
         self.elimination_ordering()
+        if sb:
+            self._symmetry_breaking(n)
         if htd:
             self.encode_htd()
         self.cover()

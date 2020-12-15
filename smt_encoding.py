@@ -7,6 +7,7 @@ from decomposition_result import DecompositionResult
 from bounds import upper_bounds
 import networkx as nx
 from collections import defaultdict
+import optimathsat
 
 
 def neg(var):
