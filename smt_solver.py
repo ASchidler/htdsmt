@@ -50,35 +50,7 @@ def solve(output_path, output_name, input_file, clique_mode=0, htd=True, lb=None
     # if fix_val is None and ub is None:
     #     ub = ubs.greedy(hypergraph, htd) if not weighted else wub.greedy(hypergraph)
     #     print(ub)
-    enc = smt_encoding.HtdSmtEncoding(hypergraph, stream=inpf)
-    enc.solve(htd=htd, fix_val=fix_val, clique=clique, lb=lb, ub=ub)
-
-    inpf.seek(0)
-
-    # Find and start solver, either in path or current directory
-    executable = 'optimathsat' if which('optimathsat') is not None else os.path.join(os.path.dirname(os.path.realpath(__file__)), 'optimathsat')
-
-    p1 = subprocess.Popen(executable, stdin=inpf, stdout=modelf, stderr=errorf, shell=True)
-    if timeout == 0:
-        p1.wait()
-    else:
-        try:
-            p1.wait(timeout)
-        except subprocess.TimeoutExpired:
-            return None
-
-    # Retrieve the result from files
-    modelf.seek(0)
-    outp = modelf.read()
-
-    inpf.close()
-    modelf.close()
-    errorf.close()
-
-    # Load the resulting model
-    try:
-        res = enc.decode(outp, False, htd=htd)
-    except ValueError as ee:
-        raise ee
+    enc = smt_encoding.HtdSmtEncoding(hypergraph)
+    res = enc.solve(htd=htd, fix_val=fix_val, clique=clique, lb=lb, ub=ub)
 
     return res

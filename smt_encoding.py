@@ -7,7 +7,7 @@ from decomposition_result import DecompositionResult
 from bounds import upper_bounds
 import networkx as nx
 from collections import defaultdict
-import optimathsat
+import lib.optimathsat as optimathsat
 
 
 def neg(var):
@@ -16,15 +16,28 @@ def neg(var):
     else:
         return f"(not {var})"
 
+
 class HtdSmtEncoding:
-    def __init__(self, hypergraph, stream):
+    def __init__(self, hypergraph):
         self.hypergraph = hypergraph
-        self.stream = stream
-        self.stream.write('(set-option :print-success false)\n(set-option :produce-models true)\n')
+        cfg = optimathsat.msat_create_config()
+        optimathsat.msat_set_option(cfg, "model_generation", "true")
+        #self.stream.write('(set-option :print-success false)\n(set-option :produce-models true)\n')
+        self.env = optimathsat.msat_create_opt_env(cfg)
+        self.int_tp = optimathsat.msat_get_integer_type(self.env)
+        self.bool_tp = optimathsat.msat_get_bool_type(self.env)
         self.ord = defaultdict(dict)
         self.arc = defaultdict(dict)
         self.weight = defaultdict(dict)
         self.allowed = defaultdict(dict)
+        self.ovars = []
+
+    def _add_var(self, name, is_bool=True):
+        self.ovars.append((name, optimathsat.msat_declare_function(self.env, name, self.bool_tp if is_bool else self.int_tp)))
+
+    def _add_formula(self, formula):
+        clause = optimathsat.msat_from_string(self.env, formula)
+        optimathsat.msat_assert_formula(self.env, clause)
 
     def prepare_vars(self):
         n = self.hypergraph.number_of_nodes()
@@ -33,7 +46,7 @@ class HtdSmtEncoding:
         # ordering
         for i in range(1, n + 1):
             for j in range(i + 1, n + 1):
-                self.stream.write("(declare-const ord_{i}_{j} Bool)\n".format(i=i, j=j))
+                self._add_var(f"ord_{i}_{j}")
                 self.ord[i][j] = f"ord_{i}_{j}"
                 self.ord[j][i] = f"(not ord_{i}_{j})"
 
@@ -42,21 +55,21 @@ class HtdSmtEncoding:
             for j in range(1, n + 1):
                 if i != j:
                     # declare arc_ij variables
-                    self.stream.write("(declare-const arc_{i}_{j} Bool)\n".format(i=i, j=j))
+                    self._add_var(f"arc_{i}_{j}")
                     self.arc[i][j] = f"arc_{i}_{j}"
 
         # weights
         for j in range(1, n + 1):
             for ej in range(1, m + 1):
-                self.stream.write("(declare-const weight_{i}_e{ej} Int)\n".format(i=j, ej=ej))
+                self._add_var(f"weight_{j}_e{ej}", is_bool=False)
                 self.weight[j][ej] = f"weight_{j}_e{ej}"
                 # Worse, keep encoding below
                 # self.stream.write("(assert (or (= weight_{i}_e{ej} 0) (= weight_{i}_e{ej} 1)))\n".format(i=j, ej=ej))
-                self.stream.write("(assert (<= weight_{i}_e{ej} 1))\n".format(i=j, ej=ej))
-                self.stream.write("(assert (>= weight_{i}_e{ej} 0))\n".format(i=j, ej=ej))
+                self._add_formula(f"(<= weight_{j}_e{ej} 1)")
+                self._add_formula(f"(>= weight_{j}_e{ej} 0)")
 
     def add_clause(self, *C):
-        self.stream.write("(assert (or %s))\n" % (' '.join(C)))
+        self._add_formula("(or %s)" % (' '.join(C)))
 
     # prepare variables
     def fractional_counters(self):
@@ -69,8 +82,7 @@ class HtdSmtEncoding:
                 weights.append(self.weight[j][e])
 
             weights = f"(+ {' '.join(weights)})" if len(weights) > 1 else weights[0]
-
-            self.stream.write("(assert (<= {weights} m))\n".format(weights=weights))
+            self._add_formula("(<= {weights} m)".format(weights=weights))
 
             # set optimization variable or value for SAT check
 
@@ -173,17 +185,17 @@ class HtdSmtEncoding:
         if htd:
             self.encode_htd(n)
 
-    def solve(self, clique=None, optimize=True, htd=True, lb=None, ub=None, fix_val=None):
-        self.stream.write("(declare-const m Int)\n")
-        self.stream.write("(assert (>= m 1))\n")
+    def solve(self, clique=None, htd=True, lb=None, ub=None, fix_val=None):
+        self._add_var("m", is_bool=False)
+        self._add_formula("(>= m 1)")
 
         if fix_val:
-            self.stream.write("(assert (= m {}))\n".format(fix_val))
+            self._add_formula(f"(= m {fix_val})")
         else:
             if ub:
-                self.stream.write("(assert (<= m {}))\n".format(lb))
+                self._add_formula(f"(<= m {ub})")
             if lb:
-                self.stream.write("(assert (>= m {}))\n".format(lb))
+                self._add_formula(f"(>= m {lb})")
 
         self.prepare_vars()
 
@@ -191,39 +203,21 @@ class HtdSmtEncoding:
 
         self.fractional_counters()
 
-        if optimize:
-            self.stream.write("(minimize m)\n")
-        self.stream.write("(check-sat)\n(get-model)\n")
+        m_obj = optimathsat.msat_make_minimize(self.env, optimathsat.msat_from_string(self.env, "m"))
+        optimathsat.msat_assert_objective(self.env, m_obj)
+        res = optimathsat.msat_solve(self.env)
+        assert (res == optimathsat.MSAT_SAT)
 
-    def decode(self, output, is_z3, htd=False):
+        return self.decode(htd)
+
+    def decode(self, htd):
         model = {}
-
-        if not is_z3:
-            lines = re.findall('\(([^ ]+) ([a-zA-Z0-9\( \/\)]*)\)', output)
-
-            for nm, val in lines:
-                # Last entry sometimes has the closing ) in the line
-                val = val.replace(")", "").strip()
-
-                if val == "true":
-                    model[nm] = True
-                elif val == "false":
-                    model[nm] = False
-                elif "/" in val:
-                    str = val.replace("(", "").replace(")", "").replace("/", "").strip().split(" ")
-                    model[nm] = int(str[0]) * 1.0 / int(str[1])
-                else:
-                    model[nm] = int(val)
-        else:
-            lines = re.findall('\(define\-fun ([^ ]*) \(\) [a-zA-Z]*\s*([a-zA-Z0-9]*)\)', output)
-
-            for nm, val in lines:
-                if val == "true":
-                    model[nm] = True
-                elif val == "false":
-                    model[nm] = False
-                else:
-                    model[nm] = int(val)
+        for vn, cn in self.ovars:
+            cval = optimathsat.msat_get_model_value(self.env, optimathsat.msat_from_string(self.env, vn))
+            try:
+                model[vn] = int(f"{cval}")
+            except ValueError:
+                model[vn] = f"{cval}".find("true") > 0
 
         try:
             ordering = self._get_ordering(model)
@@ -324,7 +318,7 @@ class HtdSmtEncoding:
         for i in range(1, n+1):
             for j in range(1, n+1):
                 if i != j:
-                    self.stream.write("(declare-const allowed_{}_{} Bool)\n".format(i, j))
+                    self._add_var(f"allowed_{i}_{j}")
                     self.allowed[i][j] = f"allowed_{i}_{j}"
 
         for i in range(1, n+1):
@@ -340,7 +334,7 @@ class HtdSmtEncoding:
                     # = 1 is superior to > 0. = 0 and = 1 (i.e. express it as or vs. =>) does have an impact on performance
                     # none is superior, it depends on the instance...
                     # TODO: This is a hack, but it is faster than using a clause...
-                    self.stream.write(f"(assert (=> (and {self.arc[i][j]} {self.allowed[i][j]} (= {self.weight[i][e]} 1)) (= {self.weight[j][e]} 1)))\n")
+                    self._add_formula(f"(=> (and {self.arc[i][j]} {self.allowed[i][j]} (= {self.weight[i][e]} 1)) (= {self.weight[j][e]} 1))")
 
                 for k in range(1, n+1):
                     if j == k or i == k:
