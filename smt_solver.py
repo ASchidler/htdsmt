@@ -11,7 +11,7 @@ from itertools import combinations
 """Starts the correct solver and returns the solver result"""
 
 
-def solve(output_path, output_name, input_file, clique_mode=0, htd=True, lb=None,  fix_val=None, timeout=0):
+def solve(output_path, output_name, input_file, clique_mode=0, htd=True, lb=None,  fix_val=None, sb=False, use_z3=False):
 
     # Open output files, these are used to interface with the solver
     base_path = os.path.join(output_path, output_name)
@@ -50,7 +50,7 @@ def solve(output_path, output_name, input_file, clique_mode=0, htd=True, lb=None
     # if fix_val is None and ub is None:
     #     ub = ubs.greedy(hypergraph, htd) if not weighted else wub.greedy(hypergraph)
     #     print(ub)
-    enc = smt_encoding.HtdSmtEncoding(hypergraph)
-    res = enc.solve(htd=htd, fix_val=fix_val, clique=clique, lb=lb, ub=ub)
+    enc = smt_encoding.HtdSmtEncoding(hypergraph, use_z3=use_z3)
+    res = enc.solve(htd=htd, fix_val=fix_val, clique=clique, lb=lb, ub=ub, sb=sb)
 
     return res

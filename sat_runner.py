@@ -16,6 +16,7 @@ parser.add_argument('-g', dest='ghtd', action='store_true', default=False,
 parser.add_argument('-d', dest='tmp_dir', default='/tmp', help='Path for temporary files, defaults to /tmp')
 
 parser.add_argument('-s', dest="solver", default='0', type=int, help='The solver to use')
+parser.add_argument('-b', dest="sb", default=False, action='store_true', help="Activate symmetry breaking")
 
 args = parser.parse_args()
 tmp_dir = args.tmp_dir
@@ -45,7 +46,7 @@ timeout = 0
 before_tm = time.time()
 
 encoder = HtdSatEncoding(hypergraph_in)
-decomp = encoder.solve(current_bound, not args.ghtd, solver)
+decomp = encoder.solve(current_bound, not args.ghtd, solver, sb=args.sb)
 
 print(f"Width : {decomp.size}")
 print(f"Solved in: {time.time() - before_tm}")

@@ -23,6 +23,8 @@ parser.add_argument('-g', dest='ghtd', action='store_true', default=False,
 
 parser.add_argument('-d', dest='tmp_dir', default='/tmp', help='Path for temporary files, defaults to /tmp')
 parser.add_argument('-v', dest='verbose', action='store_false', default=True, help='Suppress output of decomposition')
+parser.add_argument('-b', dest="sb", default=False, action='store_true', help="Activate symmetry breaking")
+parser.add_argument('-z', dest="z3", default=False, action='store_true', help="Use Z3 solver instead of optimathsat")
 
 args = parser.parse_args()
 tmp_dir = args.tmp_dir.strip()
@@ -40,10 +42,10 @@ fl = 'solve_runner'
 
 # Compute solution for GHTD
 if args.ghtd:
-    res = solver.solve(tmp_dir, fl, args.graph, htd=False, clique_mode=clique_mode)
+    res = solver.solve(tmp_dir, fl, args.graph, htd=False, clique_mode=clique_mode, sb=args.sb)
     td = res.decomposition if res is not None else None
 else:
-    res = solver.solve(tmp_dir, fl, args.graph, htd=True)
+    res = solver.solve(tmp_dir, fl, args.graph, htd=True, sb=args.sb)
     td = res.decomposition if res is not None else None
 
 # Display result if available

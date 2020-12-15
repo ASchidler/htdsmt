@@ -155,6 +155,7 @@ class HtdSatEncoding:
             self.formula.extend(tots[-1].cnf)
 
         return tots
+
     # TODO: Can we use the clique heuristic for HTD, just not put it at the top?
     def _symmetry_breaking(self, n):
         ls = {x: self.pool.id(f"ls{x}") for x in range(1, n+1)}
