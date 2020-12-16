@@ -183,12 +183,13 @@ class HtdSatEncoding:
 
             self.formula.append(clause)
 
-    def solve(self, ub, htd, solver, incremental=True, enc_type=EncType.totalizer, sb=False):
+    def solve(self, ub, htd, solver, incremental=True, enc_type=EncType.totalizer, sb=False, clique=None):
         n = self.hypergraph.number_of_nodes()
         m = self.hypergraph.number_of_edges()
         self._init_vars(htd)
 
         # Create Encoding
+        self.break_clique(clique, htd)
         self.elimination_ordering()
         if sb:
             self._symmetry_breaking(n)
@@ -300,3 +301,35 @@ class HtdSatEncoding:
                         htdd.bags[c_node].update(htdd.bags[d])
 
         return DecompositionResult(htdd.width(), htdd, arcs, ordering, weights)
+
+    def break_clique(self, cliques, htd):
+        if cliques:
+            done = set()
+            cliques.sort(key=lambda x: len(x), reverse=True)
+
+            for clique in cliques:
+                if any(x in done for x in clique):
+                    continue
+                done.update(clique)
+
+                if htd:
+                    smallest = min(clique)
+                    largest = max(clique)
+                    # Vertices are either completely before or after the clique
+                    for i in self.hypergraph.nodes():
+                        if i in clique:
+                            continue
+                        self._add_clause(self.ord[i][smallest], self.ord[largest][i])
+                else:
+                    # Vertices not in the clique are ordered before the clique
+                    for i in self.hypergraph.nodes():
+                        if i in clique:
+                            continue
+                        for j in clique:
+                            self._add_clause(self.ord[i][j])
+
+                # Vertices of the clique are ordered lexicographically
+                for i in clique:
+                    for j in clique:
+                        if i < j:
+                            self._add_clause(self.ord[i][j])

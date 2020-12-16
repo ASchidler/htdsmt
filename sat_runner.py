@@ -2,6 +2,10 @@ import argparse
 import os
 import time
 
+from networkx import Graph
+from itertools import combinations
+from networkx.algorithms.approximation import max_clique
+from networkx.algorithms.clique import find_cliques
 from pysat.solvers import Glucose3, Glucose4, Lingeling, Cadical, Minisat22, Maplesat
 
 import bounds.upper_bounds as bnd
@@ -43,8 +47,22 @@ current_bound = bnd.greedy(hypergraph_in, False, bb=False)
 timeout = 0
 before_tm = time.time()
 
+clique_mode = 2
+cliques = None
+if clique_mode > 0:
+    pv = Graph()
+    for e in hypergraph_in.edges():
+        # PRIMAL GRAPH CONSTRUCTION
+        for u, v in combinations(hypergraph_in.get_edge(e), 2):
+            pv.add_edge(u, v)
+
+    if clique_mode == 1:
+        cliques = [max_clique(pv)]
+    else:
+        cliques = [max(find_cliques(pv), key=lambda x:len(x))]
+
 encoder = HtdSatEncoding(hypergraph_in)
-decomp = encoder.solve(current_bound, not args.ghtd, solver, sb=args.sb, incremental=args.incr, enc_type=args.card)
+decomp = encoder.solve(current_bound, not args.ghtd, solver, sb=args.sb, incremental=args.incr, enc_type=args.card, clique=cliques)
 
 print(f"Width : {decomp.size}")
 print(f"Solved in: {time.time() - before_tm}")
