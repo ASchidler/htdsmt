@@ -22,6 +22,7 @@ parser.add_argument('-s', dest="solver", default='0', type=int, help='The solver
 parser.add_argument('-b', dest="sb", default=False, action='store_true', help="Activate symmetry breaking")
 parser.add_argument('-i', dest="incr", default=False, action="store_true", help="Activate incremental solving")
 parser.add_argument('-c', dest="card", default=6, type=int, help="The cardinality encoding to use for non-incremental solving")
+parser.add_argument('-q', dest="clique", default=0, type=int, help="The clique mode (0: off, 1: approx, 2: max cliques)")
 
 args = parser.parse_args()
 
@@ -47,7 +48,7 @@ current_bound = bnd.greedy(hypergraph_in, False, bb=False)
 timeout = 0
 before_tm = time.time()
 
-clique_mode = 2
+clique_mode = args.clique
 cliques = None
 if clique_mode > 0:
     pv = Graph()
