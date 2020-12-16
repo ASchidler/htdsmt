@@ -1,24 +1,16 @@
-import smt_encoding
-import os
-import subprocess
-from shutil import which
-from lib.htd_validate.htd_validate.utils.hypergraph import Hypergraph
-from networkx.algorithms.clique import find_cliques
-from networkx.algorithms.approximation import max_clique
-from networkx import Graph
 from itertools import combinations
+
+from networkx import Graph
+from networkx.algorithms.approximation import max_clique
+from networkx.algorithms.clique import find_cliques
+
+import smt_encoding
+from lib.htd_validate.htd_validate.utils.hypergraph import Hypergraph
 
 """Starts the correct solver and returns the solver result"""
 
 
-def solve(output_path, output_name, input_file, clique_mode=0, htd=True, lb=None,  fix_val=None, sb=False, use_z3=False):
-
-    # Open output files, these are used to interface with the solver
-    base_path = os.path.join(output_path, output_name)
-    inpf = open(base_path + ".encoding", "w+")
-    modelf = open(base_path + ".model", "w+")
-    errorf = open(base_path + ".error", "w+")
-
+def solve(input_file, clique_mode=0, htd=True, lb=None, fix_val=None, sb=False, use_z3=False):
     # Load graph. There is no working auto detect of encoding, so try both options
     hypergraph_in = Hypergraph.from_file(input_file, fischl_format=False)
     hypergraph2 = Hypergraph.from_file(input_file, fischl_format=True)

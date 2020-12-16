@@ -19,18 +19,13 @@ parser.add_argument('graph', metavar='graph_file', type=str,
                    help='The input file containing the hypergraph')
 
 parser.add_argument('-g', dest='ghtd', action='store_true', default=False,
-                    help='Compute a generalized hypertree decomposition, instead of a hypertree decompositoin')
+                    help='Compute a generalized hypertree decomposition, instead of a hypertree decomposition')
 
-parser.add_argument('-d', dest='tmp_dir', default='/tmp', help='Path for temporary files, defaults to /tmp')
 parser.add_argument('-v', dest='verbose', action='store_false', default=True, help='Suppress output of decomposition')
 parser.add_argument('-b', dest="sb", default=False, action='store_true', help="Activate symmetry breaking")
 parser.add_argument('-z', dest="z3", default=False, action='store_true', help="Use Z3 solver instead of optimathsat")
 
 args = parser.parse_args()
-tmp_dir = args.tmp_dir.strip()
-if "TMPDIR" in os.environ:
-    tmp_dir = os.environ['TMPDIR']
-
 
 # Use cliques only for GHTD. For HTD they even slow the heuristic methods down
 clique_mode = 2 if args.ghtd else 0
@@ -42,17 +37,15 @@ fl = 'solve_runner'
 
 # Compute solution for GHTD
 if args.ghtd:
-    res = solver.solve(tmp_dir, fl, args.graph, htd=False, clique_mode=clique_mode, sb=args.sb)
+    res = solver.solve(args.graph, htd=False, clique_mode=clique_mode, sb=args.sb)
     td = res.decomposition if res is not None else None
 else:
-    res = solver.solve(tmp_dir, fl, args.graph, htd=True, sb=args.sb)
+    res = solver.solve(args.graph, htd=True, sb=args.sb)
     td = res.decomposition if res is not None else None
 
 # Display result if available
 if res is None:
-    print("No model found. "
-          "Usually this means the solver has been terminated, e.g. due to timeout, memory limit, manually, ..."
-          f"You can check the model file {fl} in {tmp_dir} for more details.")
+    print("No model found.")
     exit(1)
 
 # Display the HTD

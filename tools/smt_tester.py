@@ -33,14 +33,14 @@ for i in range(15, 200, 2):
         before_tm = time.time()
 
         if htd is None and res is not None:
-            res = solver.solve(base_output_path, base_output_file, file, htd=True, arcs=arcs, sb=False,
+            res = solver.solve(file, htd=True, arcs=arcs, sb=False,
                                fix_val=last_val, timeout=900)
         elif htd is not None:
             # This uses the previous result as a lower bound for the htd encoding, good to test portfolio approach
             # bad to compare
             lb = None if res is None else res.size
 
-            res = solver.solve(base_output_path, base_output_file, file, htd=htd, sb=False, timeout=900, lb=None, heuristic_repair=False)
+            res = solver.solve(file, htd=htd, sb=False, timeout=900, lb=None, heuristic_repair=False)
             if htd is None:
                 htd = True
 

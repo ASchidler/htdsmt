@@ -13,16 +13,12 @@ parser.add_argument('graph', metavar='graph_file', type=str,
                    help='The input file containing the hypergraph')
 parser.add_argument('-g', dest='ghtd', action='store_true', default=False,
                     help='Compute a GHTD instead of a HTD')
-parser.add_argument('-d', dest='tmp_dir', default='/tmp', help='Path for temporary files, defaults to /tmp')
 
 parser.add_argument('-s', dest="solver", default='0', type=int, help='The solver to use')
 parser.add_argument('-b', dest="sb", default=False, action='store_true', help="Activate symmetry breaking")
 parser.add_argument('-i', dest="incr", default=False, action="store_true", help="Activate incremental solving")
 
 args = parser.parse_args()
-tmp_dir = args.tmp_dir
-if "TMPDIR" in os.environ:
-    tmp_dir = os.environ['TMPDIR']
 
 # The solver to use
 solvers = [
