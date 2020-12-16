@@ -17,6 +17,7 @@ parser.add_argument('-d', dest='tmp_dir', default='/tmp', help='Path for tempora
 
 parser.add_argument('-s', dest="solver", default='0', type=int, help='The solver to use')
 parser.add_argument('-b', dest="sb", default=False, action='store_true', help="Activate symmetry breaking")
+parser.add_argument('-i', dest="incr", default=False, action="store_true", help="Activate incremental solving")
 
 args = parser.parse_args()
 tmp_dir = args.tmp_dir
@@ -46,7 +47,7 @@ timeout = 0
 before_tm = time.time()
 
 encoder = HtdSatEncoding(hypergraph_in)
-decomp = encoder.solve(current_bound, not args.ghtd, solver, sb=args.sb)
+decomp = encoder.solve(current_bound, not args.ghtd, solver, sb=args.sb, incremental=args.incr)
 
 print(f"Width : {decomp.size}")
 print(f"Solved in: {time.time() - before_tm}")
