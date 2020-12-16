@@ -183,7 +183,7 @@ class HtdSatEncoding:
 
             self.formula.append(clause)
 
-    def solve(self, ub, htd, solver, incremental=True, enc_type=0, sb=False):
+    def solve(self, ub, htd, solver, incremental=True, enc_type=EncType.totalizer, sb=False):
         n = self.hypergraph.number_of_nodes()
         m = self.hypergraph.number_of_edges()
         self._init_vars(htd)
@@ -195,6 +195,9 @@ class HtdSatEncoding:
         if htd:
             self.encode_htd()
         self.cover()
+        if ub > m:
+            ub = m
+
         c_bound = ub
         increase = False
         c_lb = 0
@@ -204,43 +207,45 @@ class HtdSatEncoding:
             with solver() as slv:
                 slv.append_formula(self.formula)
 
-                while True:
+                while c_lb < ub:
                     if increase:
                         for c_tot in tots:
-                            if len(c_tot.lits) > c_bound:
-                                c_tot.increase(ubound=c_bound, top_id=self.pool.id(f"tots_{self.pool.top}"))
-                                slv.append_formula(c_tot.cnf.clauses[-c_tot.nof_new:])
-                                self.pool.occupy(self.pool.top - 1, tots[-1].top_id)
+                            c_tot.increase(ubound=c_bound, top_id=self.pool.id(f"tots_{self.pool.top}"))
+                            slv.append_formula(c_tot.cnf.clauses[-c_tot.nof_new:])
+                            self.pool.occupy(self.pool.top - 1, tots[-1].top_id)
 
                     assps = [-t.rhs[c_bound] for t in tots if c_bound < len(t.lits)]
                     if slv.solve(assumptions=assps):
+                        ub = c_bound
                         c_bound -= 1
-                        if c_lb == c_bound:
-                            return self.decode(slv.get_model(), htd, m, n)
+                        best_model = self.decode(slv.get_model(), htd, m, n)
                     else:
-                        c_lb = c_bound
+                        c_lb = c_bound + 1
                         c_bound += 1
                         increase = True
+                return best_model
         else:
-            while True:
+            best_model = None
+
+            while c_lb < ub:
                 with solver() as slv:
                     slv.append_formula(self.formula)
                     c_top = self.pool.top
                     for i in range(1, n + 1):
                         lits = [self.weight[i][ej] for ej in range(1, m + 1)]
 
-                        if len(lits) > c_bound:
-                            constr = CardEnc.atmost(lits, bound=c_bound, top_id=c_top, encoding=enc_type)
-                            c_top = constr.nv
-                            slv.append_formula(constr)
+                        constr = CardEnc.atmost(lits, bound=c_bound, top_id=c_top, encoding=enc_type)
+                        c_top = constr.nv
+                        slv.append_formula(constr)
 
                     if slv.solve():
+                        ub = c_bound
                         c_bound -= 1
-                        if c_lb == c_bound:
-                            return self.decode(slv.get_model(), htd, m, n)
+                        best_model = self.decode(slv.get_model(), htd, m, n)
                     else:
-                        c_lb = c_bound
+                        c_lb = c_bound + 1
                         c_bound += 1
+            return best_model
 
     def decode(self, model, htd, m, n):
         model = {abs(x): x > 0 for x in model}
