@@ -193,7 +193,7 @@ class HtdSmtEncoding:
                 summed = self._create_sum(weights)
                 compared = self._create_seq(1, summed)
                 self._add_clause(self._neg(self.arc[i][j]), compared)
-
+    # TODO: Implement HTD version for cliques
     def break_clique(self, clique):
         if clique:
             # Vertices not in the clique are ordered before the clique
@@ -380,7 +380,7 @@ class HtdSmtEncoding:
         last_vertex = ordering[-1]
         incident_edges = self.hypergraph.incident_edges(last_vertex).keys()
         if len(incident_edges) == 0:
-            raise TypeError("Fractional Hypertree Decompositions for graphs with isolated vertices.")
+            raise TypeError("Hypertree Decompositions for graphs with isolated vertices.")
 
         return ret
 
