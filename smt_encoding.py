@@ -193,15 +193,25 @@ class HtdSmtEncoding:
                 summed = self._create_sum(weights)
                 compared = self._create_seq(1, summed)
                 self._add_clause(self._neg(self.arc[i][j]), compared)
-    # TODO: Implement HTD version for cliques
-    def break_clique(self, clique):
+
+    def break_clique(self, clique, htd):
         if clique:
             # Vertices not in the clique are ordered before the clique
-            for i in self.hypergraph.nodes():
-                if i in clique:
-                    continue
-                for j in clique:
-                    self._add_clause(self.ord[i][j])
+
+            if htd:
+                smallest = min(clique)
+                largest = max(clique)
+                # Vertices are either completely before or after the clique
+                for i in self.hypergraph.nodes():
+                    if i in clique:
+                        continue
+                    self._add_clause(self.ord[i][smallest], self.ord[largest][i])
+            else:
+                for i in self.hypergraph.nodes():
+                    if i in clique:
+                        continue
+                    for j in clique:
+                        self._add_clause(self.ord[i][j])
 
             # Vertices of the clique are ordered lexicographically
             for i in clique:
@@ -213,7 +223,7 @@ class HtdSmtEncoding:
     def encode(self, clique=None, htd=True):
         n = self.hypergraph.number_of_nodes()
 
-        self.break_clique(clique=clique)
+        self.break_clique(clique=clique, htd=htd)
         self.elimination_ordering(n)
         self.cover(n)
 
