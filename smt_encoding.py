@@ -1,5 +1,5 @@
 from __future__ import absolute_import
-
+from functools import cmp_to_key
 import re
 from itertools import combinations
 from lib.htd_validate.htd_validate.decompositions import HypertreeDecomposition
@@ -30,6 +30,7 @@ class HtdSmtEncoding:
         self.weight = defaultdict(dict)
         self.allowed = defaultdict(dict)
         self.ovars = []
+        # self.log = open("smt_encoding.log", "w")
 
     def _neg(self, var):
         if self.use_z3:
@@ -58,6 +59,48 @@ class HtdSmtEncoding:
             optimathsat.msat_assert_formula(self.env, clause)
         else:
             self.z3_solver.add(formula)
+
+        # This converst the SMT encoding into the same format as the SAT encoding, for comparison
+        # if self.log:
+        #     formula = formula.replace("_e", "_")
+        #     m = re.search("\(not ([a-zA-Z_0-9)]*)\)", formula)
+        #     while m is not None:
+        #         formula = formula.replace(m.group(0), f"-{m.group(1)}")
+        #         m = re.search("\(not ([a-zA-Z_0-9)]*)\)", formula)
+        #     m = re.search("\(= ([a-zA-Z_0-9\- ]*) 1\)", formula)
+        #     while m is not None:
+        #         formula = formula.replace(m.group(0), f"{m.group(1)}")
+        #         m = re.search("\(= ([a-zA-Z_0-9\- ]*) 1\)", formula)
+        #     m = re.search("\(= ([a-zA-Z_0-9\- ]*) 0\)", formula)
+        #     while m is not None:
+        #         formula = formula.replace(m.group(0), f"-{m.group(1)}")
+        #         m = re.search("\(= ([a-zA-Z_0-9\- ]*) 0\)", formula)
+        #     m = re.search("\(>= \(\+ ([a-zA-Z_0-9\- ]*)\) 1\)", formula)
+        #     if m is not None:
+        #         formula = formula.replace(m.group(0), m.group(1))
+        #     m = re.search("\(>= ([a-zA-Z_0-9\- ]*) 1\)", formula)
+        #     if m is not None:
+        #         formula = formula.replace(m.group(0), m.group(1))
+        #     m = re.search("\(or ([a-zA-Z_0-9\- ]*)\)", formula)
+        #     while m is not None:
+        #         formula = formula.replace(m.group(0), m.group(1))
+        #         m = re.search("\(or ([a-zA-Z_0-9\- ]*)\)", formula)
+        #     m = re.search("\(=> \(and ([a-zA-Z_0-9\- ]*)\) ([a-zA-Z_0-9\- ]*)\)", formula)
+        #     if m is not None:
+        #         changed = m.group(1).replace(" ", " -")
+        #         changed = "-" + changed
+        #         formula = formula.replace(m.group(0), changed + " " + m.group(2))
+        #         #(=> (and arc_2_5 allowed_2_5 weight_2_1) weight_5_1)
+        #     formula = formula.replace("  ", " ")
+        #     formula = formula.replace("  ", " ")
+        #     m = re.search("^ ", formula)
+        #     if m is not None:
+        #         formula = formula[1:]
+        #     m = re.search("([a-z])_", formula)
+        #     while m is not None:
+        #         formula = formula.replace(m.group(0), m.group(1))
+        #         m = re.search("([a-z])_", formula)
+        #     self.log_file.write(formula + "\n")
 
     def prepare_vars(self):
         n = self.hypergraph.number_of_nodes()
@@ -112,15 +155,11 @@ class HtdSmtEncoding:
         # Does not work with variables, bound needs to be a constant
         return z3.AtMost(*lst, bound)
 
-    def fractional_counters(self):
+    def encode_cardinality(self):
         n = self.hypergraph.number_of_nodes()
-
+        m = self.hypergraph.number_of_edges()
         for j in range(1, n + 1):
-            weights = []
-            for e in self.hypergraph.edges():
-                assert (e > 0)
-                weights.append(self.weight[j][e])
-
+            weights = [self.weight[j][ej] for ej in range(1, m+1)]
             weights = self._create_sum(weights)
             self._add_formula(self._create_seq(weights, self.m))
 
@@ -139,12 +178,11 @@ class HtdSmtEncoding:
                 if i == j:
                     continue
 
-                self._add_clause(self._neg(self.ord[i][j]), self._neg(self.arc[j][i]))
-
-                for k in range(1, n + 1):
-                    if i == k or j == k:
+                for ln in range(1, n + 1):
+                    if i == ln or j == ln:
                         continue
-                    self._add_clause(self._neg(self.ord[i][j]), self._neg(self.ord[j][k]), self.ord[i][k])
+                    self._add_clause(self._neg(self.ord[i][j]), self._neg(self.ord[j][ln]), self.ord[i][ln])
+                    self._add_clause(self._neg(self.arc[i][j]), self._neg(self.arc[i][ln]), self.arc[j][ln], self.arc[ln][j])
 
         for e in self.hypergraph.edges():
             # PRIMAL GRAPH CONSTRUCTION
@@ -155,20 +193,6 @@ class HtdSmtEncoding:
                     # AS CLAUSE
                     self._add_clause(self._neg(self.ord[i][j]), self.arc[i][j])
                     self._add_clause(self._neg(self.ord[j][i]), self.arc[j][i])
-
-        for i in range(1, n + 1):
-            for j in range(1, n + 1):
-                if i == j:
-                    continue
-                for k in range(j + 1, n + 1):
-                    if i == k or j == k:
-                        continue
-
-                    # AS CLAUSE
-                    # These two clauses are entailed by the improvement clauses and the next clause
-                    # self.add_clause([-self.arc[i][j], -self.arc[i][l], -self.ord[j][l], self.arc[j][l]])
-                    # self.add_clause([-self.arc[i][j], -self.arc[i][l], self.ord[j][l], self.arc[l][j]])
-                    self._add_clause(self._neg(self.arc[i][j]), self._neg(self.arc[i][k]), self.arc[j][k], self.arc[k][j])
 
     def cover(self, n):
         # If a vertex j is in the bag, it must be covered:
@@ -199,13 +223,17 @@ class HtdSmtEncoding:
             # Vertices not in the clique are ordered before the clique
 
             if htd:
-                smallest = min(clique)
-                largest = max(clique)
+                standin = next(iter(clique))
+
                 # Vertices are either completely before or after the clique
                 for i in self.hypergraph.nodes():
                     if i in clique:
                         continue
-                    self._add_clause(self.ord[i][smallest], self.ord[largest][i])
+
+                    for j in clique:
+                        if j != standin:
+                            self._add_clause(self._neg(self.ord[i][standin]), self.ord[i][j])
+                            self._add_clause(self.ord[i][standin], self._neg(self.ord[i][j]))
             else:
                 for i in self.hypergraph.nodes():
                     if i in clique:
@@ -213,10 +241,9 @@ class HtdSmtEncoding:
                     for j in clique:
                         self._add_clause(self.ord[i][j])
 
-            # Vertices of the clique are ordered lexicographically
-            for i in clique:
-                for j in clique:
-                    if i != j:
+                # Vertices of the clique is ordered lexicographically
+                for i in clique:
+                    for j in clique:
                         if i < j:
                             self._add_clause(self.ord[i][j])
 
@@ -257,7 +284,7 @@ class HtdSmtEncoding:
         if sb:
             self._symmetry_breaking(self.hypergraph.number_of_nodes())
 
-        self.fractional_counters()
+        self.encode_cardinality()
 
         if self.use_z3:
             self.z3_solver.check()
@@ -360,16 +387,14 @@ class HtdSmtEncoding:
         return None
 
     def _get_ordering(self, model):
-        ordering = []
-        for i in range(1, self.hypergraph.number_of_nodes() + 1):
-            pos = 0
-            for j in ordering:
-                # We know j is smaller due to range processing
-                if not model[self.ord[j][i]]:
-                    break
-                # Move current element one position forward
-                pos += 1
-            ordering.insert(pos, i)
+        ordering = list(range(1, self.hypergraph.number_of_nodes() + 1))
+
+        def find_ord(x, y):
+            if x < y:
+                return -1 if model[self.ord[x][y]] else 1
+            else:
+                return 1 if model[self.ord[y][x]] else -1
+        ordering.sort(key=cmp_to_key(find_ord))
 
         return ordering
     
@@ -408,7 +433,7 @@ class HtdSmtEncoding:
         return ret
 
     def encode_htd(self, n):
-        # # Whenever a tree node covers an edge, it covers all of the edge's vertices
+        # # Whenever a tree node covers an edge, it covers all the edge's vertices
         for i in range(1, n+1):
             for j in range(1, n+1):
                 if i != j:
@@ -419,8 +444,8 @@ class HtdSmtEncoding:
                 if i == j:
                     continue
 
-                # These clauses are not strictly necessary, but makes the solving faster
-                self._add_clause(self._neg(self.ord[i][j]), self.allowed[j][i])
+                # These clauses are not strictly necessary, but makes the solving faster -- Not
+                # self._add_clause(self._neg(self.ord[i][j]), self.allowed[j][i])
 
                 # Enforce subsets in arc-successors
                 for e in self.hypergraph.edges():
@@ -441,10 +466,8 @@ class HtdSmtEncoding:
                     # Arc-paths are only possible among successors of i, if farther away -> forbidden
                     self._add_clause(self._neg(self.arc[i][j]), self._neg(self.arc[j][k]), self.arc[i][k], self._neg(self.allowed[i][k]))
 
-            for e in self.hypergraph.incident_edges(i):
-                for j in range(1, n + 1):
-                    if i != j:
-                        if self.use_z3:
-                            self._add_clause(self.allowed[i][j], self.weight[j][e] == 0)
-                        else:
-                            self._add_clause(self.allowed[i][j], f"(= {self.weight[j][e]} 0)")
+                for e in self.hypergraph.incident_edges(i):
+                    if self.use_z3:
+                        self._add_clause(self.allowed[i][j], self.weight[j][e] == 0)
+                    else:
+                        self._add_clause(self.allowed[i][j], f"(= {self.weight[j][e]} 0)")

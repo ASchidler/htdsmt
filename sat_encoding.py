@@ -15,6 +15,7 @@ class HtdSatEncoding:
         self.hypergraph = hypergraph
         self.formula = CNF()
         self.pool = IDPool()
+        #self.log_file = open("sat_encoding.log", "w")
 
         n = self.hypergraph.number_of_nodes()
 
@@ -24,6 +25,7 @@ class HtdSatEncoding:
         self.allowed = {i: {} for i in range(0, n + 1)}
 
     def _add_clause(self, *args):
+        #self.log_file.write(" ".join([f"{'-' if x < 0 else ''}{self.pool.id2obj[abs(x)]}" for x in args]) + "\n")
         self.formula.append([x for x in args])
 
     def _init_vars(self, htd):
@@ -39,8 +41,9 @@ class HtdSatEncoding:
         # arcs
         for i in range(1, n + 1):
             for j in range(1, n + 1):
-                # declare arc_ij variables
-                self.arc[i][j] = self.pool.id(f"arc{i}_{j}")
+                if i != j:
+                    # declare arc_ij variables
+                    self.arc[i][j] = self.pool.id(f"arc{i}_{j}")
 
         # weights
         for j in range(1, n + 1):
@@ -49,11 +52,6 @@ class HtdSatEncoding:
 
         if htd:
             for i in range(1, n + 1):
-                incident = set()
-                for e in self.hypergraph.incident_edges(i):
-                    incident.update(self.hypergraph.get_edge(e))
-                incident.remove(i)
-
                 for j in range(1, n + 1):
                     if i == j:
                         continue
@@ -70,7 +68,7 @@ class HtdSatEncoding:
                 self._add_clause(-self.arc[j][i], -self.arc[i][j])
                 # Enforce arc direction from smaller to bigger ordered vertex
                 self._add_clause(-self.ord[i][j], -self.arc[j][i])
-                self._add_clause(self.ord[i][j], -self.arc[i][j])
+                self._add_clause(-self.ord[j][i], -self.arc[i][j])
 
         for i in range(1, n + 1):
             for j in range(1, n + 1):
@@ -90,12 +88,8 @@ class HtdSatEncoding:
                 if i > j:
                     i, j = j, i
                 if i < j:
-                    self._add_clause(self.ord[i][j], self.arc[j][i])
                     self._add_clause(-self.ord[i][j], self.arc[i][j])
-
-        # forbid self loops
-        for i in range(1, n + 1):
-            self._add_clause(-self.arc[i][i])
+                    self._add_clause(-self.ord[j][i], self.arc[j][i])
 
     def cover(self):
         n = self.hypergraph.number_of_nodes()
@@ -124,20 +118,20 @@ class HtdSatEncoding:
         n = self.hypergraph.number_of_nodes()
 
         for i in range(1, n+1):
-
             for j in range(1, n+1):
                 if i == j:
                     continue
 
-                # This clause is not required, but may speed things up (?)
-                self._add_clause(-self.ord[i][j], self.allowed[j][i])
+                # This clause is not required, but may speed things up (?) -- Not
+                # self._add_clause(-self.ord[i][j], self.allowed[j][i])
 
                 for e in self.hypergraph.edges():
                     self._add_clause(-self.arc[i][j], -self.allowed[i][j], -self.weight[i][e], self.weight[j][e])
 
                 for k in range(1, n+1):
-                    if k == i or k == j:
+                    if j == k or i == k:
                         continue
+
                     self._add_clause(-self.arc[j][k], self.allowed[i][j], -self.allowed[i][k])
                     self._add_clause(-self.arc[i][j], -self.arc[j][k], self.arc[i][k], -self.allowed[i][k])
 
@@ -156,7 +150,6 @@ class HtdSatEncoding:
 
         return tots
 
-    # TODO: Can we use the clique heuristic for HTD, just not put it at the top?
     def _symmetry_breaking(self, n):
         ls = {x: self.pool.id(f"ls{x}") for x in range(1, n+1)}
         s = {x: {} for x in range(1, n+1)}
@@ -191,11 +184,12 @@ class HtdSatEncoding:
         # Create Encoding
         self.break_clique(clique, htd)
         self.elimination_ordering()
+        self.cover()
         if sb:
             self._symmetry_breaking(n)
         if htd:
             self.encode_htd()
-        self.cover()
+
         if ub > m:
             ub = m
 
@@ -260,7 +254,7 @@ class HtdSatEncoding:
         ordering.sort(key=cmp_to_key(find_ord))
 
         weights = {x: {ej: 1 if model[self.weight[x][ej]] else 0 for ej in range(1, m+1)} for x in range(1, n+1)}
-        arcs = {x: {y: model[self.arc[x][y]] for y in range(1, n+1)} for x in range(1, n+1)}
+        arcs = {x: {y: model[self.arc[x][y]] for y in range(1, n+1) if x != y} for x in range(1, n+1)}
 
         htdd = HypertreeDecomposition.from_ordering(hypergraph=self.hypergraph, ordering=ordering,
                                                     weights=weights)
@@ -302,34 +296,26 @@ class HtdSatEncoding:
 
         return DecompositionResult(htdd.width(), htdd, arcs, ordering, weights)
 
-    def break_clique(self, cliques, htd):
-        if cliques:
-            done = set()
-            cliques.sort(key=lambda x: len(x), reverse=True)
-
-            for clique in cliques:
-                if any(x in done for x in clique):
-                    continue
-                done.update(clique)
-
-                if htd:
-                    smallest = min(clique)
-                    largest = max(clique)
-                    # Vertices are either completely before or after the clique
-                    for i in self.hypergraph.nodes():
-                        if i in clique:
-                            continue
-                        self._add_clause(self.ord[i][smallest], self.ord[largest][i])
-                else:
-                    # Vertices not in the clique are ordered before the clique
-                    for i in self.hypergraph.nodes():
-                        if i in clique:
-                            continue
-                        for j in clique:
-                            self._add_clause(self.ord[i][j])
-
-                # Vertices of the clique are ordered lexicographically
-                for i in clique:
+    def break_clique(self, clique, htd):
+        if clique:
+            if htd:
+                smallest = min(clique)
+                largest = max(clique)
+                # Vertices are either completely before or after the clique
+                for i in self.hypergraph.nodes():
+                    if i in clique:
+                        continue
+                    self._add_clause(self.ord[i][smallest], self.ord[largest][i])
+            else:
+                # Vertices not in the clique are ordered before the clique
+                for i in self.hypergraph.nodes():
+                    if i in clique:
+                        continue
                     for j in clique:
-                        if i < j:
-                            self._add_clause(self.ord[i][j])
+                        self._add_clause(self.ord[i][j])
+
+            # Vertices of the clique are ordered lexicographically
+            for i in clique:
+                for j in clique:
+                    if i < j:
+                        self._add_clause(self.ord[i][j])

@@ -1,6 +1,8 @@
 import argparse
 import os
 import time
+import sys
+from lib.htd_validate.htd_validate.decompositions import GeneralizedHypertreeDecomposition
 
 from networkx import Graph
 from itertools import combinations
@@ -49,7 +51,7 @@ timeout = 0
 before_tm = time.time()
 
 clique_mode = args.clique
-cliques = None
+clique = None
 if clique_mode > 0:
     pv = Graph()
     for e in hypergraph_in.edges():
@@ -58,12 +60,21 @@ if clique_mode > 0:
             pv.add_edge(u, v)
 
     if clique_mode == 1:
-        cliques = [max_clique(pv)]
+        clique = max_clique(pv)
     else:
-        cliques = [max(find_cliques(pv), key=lambda x:len(x))]
+        clique = max(find_cliques(pv), key=lambda x: len(x))
 
 encoder = HtdSatEncoding(hypergraph_in)
-decomp = encoder.solve(current_bound, not args.ghtd, solver, sb=args.sb, incremental=args.incr, enc_type=args.card, clique=cliques)
+res = encoder.solve(current_bound, not args.ghtd, solver, sb=args.sb, incremental=args.incr, enc_type=args.card, clique=clique)
 
-print(f"Width : {decomp.size}")
-print(f"Solved in: {time.time() - before_tm}")
+valid = res.decomposition.validate(res.decomposition.hypergraph)
+valid_ghtd = GeneralizedHypertreeDecomposition.validate(res.decomposition, res.decomposition.hypergraph)
+valid_sc = res.decomposition.inverse_edge_function_holds()
+
+sys.stdout.write("Result: {}\tValid:  {}\tSP: {}\tGHTD: {}\tin {}\n".format(
+    res.size,
+    valid,
+    valid_sc,
+    valid_ghtd,
+    time.time() - before_tm
+))

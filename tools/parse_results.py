@@ -34,6 +34,8 @@ def parse_file(f):
             result.result = detk['objective']
         elif cln.startswith("Width : "):
             result.result = int(cln.split(":")[1].strip())
+        elif cln.startswith("Result:"):
+            result.result = int(cln.split(":")[1].split()[0].strip())
         elif cln.startswith("command line"):
             result.name = os.path.split(cln.strip().split(" ")[-1])[-1]
 
@@ -42,7 +44,8 @@ def parse_file(f):
 overall_results = {}
 seen_instances = set()
 
-for cff in os.listdir(input_path):
+
+for cff in sorted(os.listdir(input_path)):
     cf = os.path.join(input_path, cff)
     if os.path.isfile(cf):
         if cf.endswith("tar.bz2"):
@@ -56,8 +59,8 @@ for cff in os.listdir(input_path):
                     # Convert to MB
                     cr.memory /= 1024
                     if cr.result is not None:
-                        total +=1
-                    if cr.name is not None:
+                        total += 1
+                    if cr.name is not None and len(cr.name) > 2 and cr.name != "sat_runner" and cr.name != "smt_runner":  # ignore flags
                         seen_instances.add(cr.name)
                         if cr.name in results:
                             print(f"Duplicate in {cf}/{ctf}")
@@ -101,6 +104,5 @@ with open("results.csv", "w") as csvf:
                     known_result = cr.result
                 elif known_result != cr.result:
                     print(f"Result disparity for instance {ci} at file {csf}")
-
 
         csvf.write(os.linesep)
