@@ -1,11 +1,12 @@
 from itertools import combinations
-from pysat.formula import IDPool, CNF
+from pysat.formula import IDPool, CNF, WCNF
 from pysat.card import ITotalizer, CardEnc, EncType
 from lib.htd_validate.htd_validate.decompositions import HypertreeDecomposition
 from decomposition_result import DecompositionResult
 from functools import cmp_to_key
 import networkx as nx
-
+import subprocess
+from os import getpid, path, remove
 
 class HtdSatEncoding:
     def __init__(self, hypergraph):
@@ -176,7 +177,7 @@ class HtdSatEncoding:
 
             self.formula.append(clause)
 
-    def solve(self, ub, htd, solver, incremental=True, enc_type=EncType.totalizer, sb=False, clique=None):
+    def solve(self, ub, htd, solver, incremental=True, enc_type=EncType.totalizer, sb=False, clique=None, maxsat=False, tmpdir=None):
         n = self.hypergraph.number_of_nodes()
         m = self.hypergraph.number_of_edges()
         self._init_vars(htd)
@@ -197,6 +198,7 @@ class HtdSatEncoding:
         increase = False
         c_lb = 0
 
+        # TODO: Once we have solved the formula once, assumptions can be added as clauses
         if incremental:
             tots = self._encode_cardinality(ub, m, n)
             with solver() as slv:
@@ -219,7 +221,7 @@ class HtdSatEncoding:
                         c_bound += 1
                         increase = True
                 return best_model
-        else:
+        elif not maxsat:
             best_model = None
 
             while c_lb < ub:
@@ -241,6 +243,29 @@ class HtdSatEncoding:
                         c_lb = c_bound + 1
                         c_bound += 1
             return best_model
+        else:
+            # TODO: Case when UB is not a ubound for ghtw...
+            # Maxsat
+            tots = self._encode_cardinality(ub, m, n)
+            maxsat_clauses = WCNF()
+            for x in range(1, ub):
+                var = self.pool.id(f"cards_{x}")
+                maxsat_clauses.append([var], weight=1)
+                c_clause = []
+                for t in tots:
+                    maxsat_clauses.append([-var, -t.rhs[x]])
+                    c_clause.append(t.rhs[x])
+            maxsat_clauses.extend(self.formula)
+
+            enc_file = path.join(tmpdir, f"{getpid()}.cnf")
+            maxsat_clauses.to_file(enc_file)
+
+            p = subprocess.Popen(["bin/uwrmaxsat", "-m", enc_file], stdout=subprocess.PIPE)
+            r = p.communicate()[0].decode("utf-8")
+            for cline in r.splitlines():
+                if cline.startswith("v"):
+                    model = [int(x) for x in cline.split()[1:]]
+                    return self.decode(model, htd, m, n)
 
     def decode(self, model, htd, m, n):
         model = {abs(x): x > 0 for x in model}

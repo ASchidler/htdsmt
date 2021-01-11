@@ -25,7 +25,8 @@ parser.add_argument('-b', dest="sb", default=False, action='store_true', help="A
 parser.add_argument('-i', dest="incr", default=False, action="store_true", help="Activate incremental solving")
 parser.add_argument('-c', dest="card", default=6, type=int, help="The cardinality encoding to use for non-incremental solving")
 parser.add_argument('-q', dest="clique", default=0, type=int, help="The clique mode (0: off, 1: approx, 2: max cliques)")
-
+parser.add_argument('-t', dest="tmpdir", default="/tmp", type=str, help="The temporary directory to use")
+parser.add_argument('-m', dest="maxsat", default=False, action="store_true", help="Use MaxSAT")
 args = parser.parse_args()
 
 # The solver to use
@@ -65,7 +66,8 @@ if clique_mode > 0:
         clique = max(find_cliques(pv), key=lambda x: len(x))
 
 encoder = HtdSatEncoding(hypergraph_in)
-res = encoder.solve(current_bound, not args.ghtd, solver, sb=args.sb, incremental=args.incr, enc_type=args.card, clique=clique)
+res = encoder.solve(current_bound, not args.ghtd, solver, sb=args.sb, incremental=args.incr, enc_type=args.card, clique=clique,
+                    maxsat=args.maxsat, tmpdir=args.tmpdir)
 
 valid = res.decomposition.validate(res.decomposition.hypergraph)
 valid_ghtd = GeneralizedHypertreeDecomposition.validate(res.decomposition, res.decomposition.hypergraph)
