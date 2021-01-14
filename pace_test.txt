@@ -1,9 +1,0 @@
-c This file describes a hypergraph in htd PACE2019 format
-c with 5 vertices and 5 hyperedges
-p htd 5 5
-1 1 2 3
-2 2 3 4
-3 3 4 5
-c this is a comment and will be ignored
-4 4 5 1
-5 5 1 2

@@ -124,7 +124,7 @@ class HtdSatEncoding:
                     continue
 
                 # This clause is not required, but may speed things up (?) -- Not
-                # self._add_clause(-self.ord[i][j], self.allowed[j][i])
+                self._add_clause(-self.ord[i][j], self.allowed[j][i])
 
                 for e in self.hypergraph.edges():
                     self._add_clause(-self.arc[i][j], -self.allowed[i][j], -self.weight[i][e], self.weight[j][e])
@@ -246,9 +246,10 @@ class HtdSatEncoding:
         else:
             # TODO: Case when UB is not a ubound for ghtw...
             # Maxsat
+            ub = min(ub, m-1)
             tots = self._encode_cardinality(ub, m, n)
             maxsat_clauses = WCNF()
-            for x in range(1, ub):
+            for x in range(1, ub+1):
                 var = self.pool.id(f"cards_{x}")
                 maxsat_clauses.append([var], weight=1)
                 c_clause = []

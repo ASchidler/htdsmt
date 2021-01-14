@@ -1,5 +1,0 @@
-Requirements:
-- Python 2
-- Optimathsat (http://optimathsat.disi.unitn.it/)
-
-Use frasmt.py and supply the file either via path as the first argument or via STDIN
