@@ -4,9 +4,11 @@ from __future__ import absolute_import
 import argparse
 import sys
 import logging
-import smt_solver as solver
+import opb_encoding as enc
 from lib.htd_validate.htd_validate.decompositions import GeneralizedHypertreeDecomposition
 import time
+import bounds.upper_bounds as bnd
+from lib.htd_validate.htd_validate.utils import Hypergraph
 import os
 
 # End of imports
@@ -23,8 +25,7 @@ parser.add_argument('-g', dest='ghtd', action='store_true', default=False,
 
 parser.add_argument('-v', dest='verbose', action='store_false', default=True, help='Suppress output of decomposition')
 parser.add_argument('-b', dest="sb", default=False, action='store_true', help="Activate symmetry breaking")
-parser.add_argument('-z', dest="z3", default=False, action='store_true', help="Use Z3 solver instead of optimathsat")
-parser.add_argument('-q', dest="clique", default=0, type=int, action='store', help="Clique mode, 0 is disabled")
+parser.add_argument('-t', dest="tmpdir", default="/tmp", type=str, help="The temporary directory to use")
 
 args = parser.parse_args()
 
@@ -33,23 +34,21 @@ res = None
 before_tm = time.time()
 fl = 'solve_runner'
 
-# Compute solution for GHTD
-if args.ghtd:
-    res = solver.solve(args.graph, htd=False, clique_mode=args.clique, sb=args.sb)
-    td = res.decomposition if res is not None else None
-else:
-    res = solver.solve(args.graph, htd=True, clique_mode=args.clique, sb=args.sb)
-    td = res.decomposition if res is not None else None
+input_file = args.graph
+hypergraph_in = Hypergraph.from_file(input_file, fischl_format=False)
+hypergraph2 = Hypergraph.from_file(input_file, fischl_format=True)
 
-# Display result if available
-if res is None:
-    print("No model found.")
-    exit(1)
+if hypergraph_in is None or (hypergraph2 is not None and len(hypergraph2.edges()) > len(hypergraph_in.edges())):
+    hypergraph_in = hypergraph2
 
-# Display the HTD
-valid = td.validate(td.hypergraph)
-valid_ghtd = GeneralizedHypertreeDecomposition.validate(td, td.hypergraph)
-valid_sc = td.inverse_edge_function_holds()
+current_bound = bnd.greedy(hypergraph_in, False, bb=False)
+
+encoder = enc.HtdSatEncoding(hypergraph_in)
+res = encoder.solve(current_bound, not args.ghtd, sb=args.sb, tmpdir=args.tmpdir)
+
+valid = res.decomposition.validate(res.decomposition.hypergraph)
+valid_ghtd = GeneralizedHypertreeDecomposition.validate(res.decomposition, res.decomposition.hypergraph)
+valid_sc = res.decomposition.inverse_edge_function_holds()
 
 sys.stdout.write("Result: {}\tValid:  {}\tSP: {}\tGHTD: {}\tin {}\n".format(
     res.size,
@@ -59,24 +58,3 @@ sys.stdout.write("Result: {}\tValid:  {}\tSP: {}\tGHTD: {}\tin {}\n".format(
     time.time() - before_tm
 ))
 
-if (args.ghtd and not valid_ghtd) or not valid:
-    exit(1)
-
-if args.verbose:
-    mode = "ghtd" if args.ghtd else "htd"
-    print(f"s {mode} {len(td.bags)} {res.size} {len(td.hypergraph.nodes())} {len(td.hypergraph.edges())}")
-
-    # Output bags
-    for k, v in td.bags.items():
-        print("b {} {}".format(k, " ".join((str(x) for x in v))))
-    print("")
-
-    # Output edges
-    for u, v in td.tree.edges:
-        print(f"{u} {v}")
-    print("")
-
-    # Output edge function
-    for k, v in td.hyperedge_function.items():
-        for k2, v2 in v.items():
-            print(f"w {k} {k2} {v2}")

@@ -265,7 +265,7 @@ class HtdSatEncoding:
             r = p.communicate()[0].decode("utf-8")
             for cline in r.splitlines():
                 if cline.startswith("v"):
-                    model = [int(x) for x in cline.split()[1:]]
+                    model = [int(x.replace("x", "")) for x in cline.split()[1:]]
                     return self.decode(model, htd, m, n)
 
     def decode(self, model, htd, m, n):

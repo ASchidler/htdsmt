@@ -39,10 +39,10 @@ except ImportError:
 import copy
 import mimetypes
 
-try:
-    import cplex as cx
-except ImportError:
-    cx = None
+# try:
+#     import cplex as cx
+# except ImportError:
+cx = None
 
 try:
     import z3

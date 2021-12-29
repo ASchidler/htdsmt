@@ -13,6 +13,7 @@ from pysat.solvers import Glucose3, Glucose4, Lingeling, Cadical, Minisat22, Map
 import bounds.upper_bounds as bnd
 from lib.htd_validate.htd_validate.utils.hypergraph import Hypergraph
 from sat_encoding import HtdSatEncoding
+from sat_encoding2 import HtdSatEncoding2
 
 parser = argparse.ArgumentParser(description='Calculate the hypertree decomposition for a given hypergraph')
 parser.add_argument('graph', metavar='graph_file', type=str,
@@ -65,7 +66,9 @@ if clique_mode > 0:
     else:
         clique = max(find_cliques(pv), key=lambda x: len(x))
 
+#encoder = HtdSatEncoding(hypergraph_in)
 encoder = HtdSatEncoding(hypergraph_in)
+
 res = encoder.solve(current_bound, not args.ghtd, solver, sb=args.sb, incremental=args.incr, enc_type=args.card, clique=clique,
                     maxsat=args.maxsat, tmpdir=args.tmpdir)
 

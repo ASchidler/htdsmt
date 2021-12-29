@@ -444,8 +444,8 @@ class HtdSmtEncoding:
                 if i == j:
                     continue
 
-                # These clauses are not strictly necessary, but makes the solving faster -- Not
-                # self._add_clause(self._neg(self.ord[i][j]), self.allowed[j][i])
+                # These clauses are not strictly necessary, but make the solving faster -- Not
+                self._add_clause(self._neg(self.ord[i][j]), self.allowed[j][i])
 
                 # Enforce subsets in arc-successors
                 for e in self.hypergraph.edges():

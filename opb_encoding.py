@@ -18,6 +18,7 @@ class HtdSatEncoding:
         self.hypergraph = hypergraph
         self.formula = OpbFile()
         self.pool = IDPool()
+
         #self.log_file = open("sat_encoding.log", "w")
 
         n = self.hypergraph.number_of_nodes()
@@ -167,14 +168,79 @@ class HtdSatEncoding:
     #                     self.formula.append([-self.ord[j][k], -s[i][k]])
     #
     #         self.formula.append(clause)
-
-    def solve(self, ub, htd, solver, incremental=True, enc_type=EncType.totalizer, sb=False, clique=None, maxsat=False, tmpdir=None):
+    def optimize(self, ub, tmpdir, htd):
         n = self.hypergraph.number_of_nodes()
+        m = self.hypergraph.number_of_edges()
+
+        # If k of the cardinality vars are true, the cardinality is k
+        nvars = [self.pool.id(f"card_{k}") for k in range(0, ub)]
+        # Symmetry breaking, make sure that they have an order
+        for k in range(0, ub-1):
+            self.formula.append_clause([-nvars[k], nvars[k+1]])
+
+        # Add cardinality constraints, each added hyperedge has to have an enabled cardinality bit
+        for i in range(1, n + 1):
+            lits = [(-1, self.weight[i][ej]) for ej in range(1, m + 1)]
+            for k in range(0, ub):
+                lits.append((1, nvars[k]))
+            self.formula.append(lits, True, 0)
+
+        self.formula.optimize(True, [(1, x) for x in nvars])
+
+        enc_file = path.join(tmpdir, f"{getpid()}.opb")
+        self.formula.to_file(enc_file)
+
+        # p = subprocess.Popen(["bin/roundingsat", "--print-sol=1", "--lp=0", "--opt-mode=hybrid", "--cg-strat=1",
+        #                       "--cg-indcores=0", " --cg-encoding=reified", "--cg-resprop=1", enc_file], stdout=subprocess.PIPE)
+        p = subprocess.Popen(["bin/roundingsat", "--print-sol=1", "--lp=0", "--opt-mode=linear", enc_file],
+                             stdout=subprocess.PIPE)
+        r = p.communicate()[0].decode("utf-8")
+
+        for cline in r.splitlines():
+            if cline.startswith("v"):
+                model = [int(x.replace("x", "")) for x in cline.split()[1:]]
+                return self.decode(model, htd, m, n)
+
+    def iterative(self, ub, tmpdir, htd):
+        n = self.hypergraph.number_of_nodes()
+        m = self.hypergraph.number_of_edges()
+        c_bound = ub
+        c_lb = 0
+        best_model = None
+
+        while c_lb < ub:
+            # Add new cardinality constraints
+            self.formula.clear_temporary()
+            for i in range(1, n + 1):
+                lits = [(-1, self.weight[i][ej]) for ej in range(1, m + 1)]
+                self.formula.add_temporary(lits, True, -ub)
+
+            # TODO: We could remember the file pointer of the main encoding and only overwrite the card constraints...
+            enc_file = path.join(tmpdir, f"{getpid()}.opb")
+            self.formula.to_file(enc_file)
+
+            p = subprocess.Popen(["bin/roundingsat", "--print-sol=1", "--lp=1", enc_file], stdout=subprocess.PIPE)
+            r = p.communicate()[0].decode("utf-8")
+            model = None
+            for cline in r.splitlines():
+                if cline.startswith("v"):
+                    model = [int(x.replace("x", "")) for x in cline.split()[1:]]
+                    best_model = self.decode(model, htd, m, n)
+
+            if model:
+                ub = c_bound
+                c_bound -= 1
+            else:
+                c_lb = c_bound + 1
+                c_bound += 1
+
+        return best_model
+
+    def solve(self, ub, htd, sb=False,  tmpdir=None):
         m = self.hypergraph.number_of_edges()
         self._init_vars(htd)
 
         # Create Encoding
-        self.break_clique(clique, htd)
         self.elimination_ordering()
         self.cover()
         # if sb:
@@ -185,43 +251,10 @@ class HtdSatEncoding:
         if ub > m:
             ub = m
 
-        c_bound = ub
-        increase = False
-        c_lb = 0
+        #best_model = self.iterative(ub, tmpdir, htd)
+        best_model = self.optimize(ub, tmpdir, htd)
 
-        # TODO: Once we have solved the formula once, assumptions can be added as clauses
-
-        if not maxsat:
-            best_model = None
-
-            while c_lb < ub:
-                with solver() as slv:
-                    self.formula.clear_temporary()
-                    slv.append_formula(self.formula)
-
-                    for i in range(1, n + 1):
-                        lits = [(-1, self.weight[i][ej]) for ej in range(1, m + 1)]
-                        self.formula.add_temporary(lits, True, -ub)
-
-                        # TODO: We could remember the file pointer of the main encoding and only overwrite the card constraints...
-                        enc_file = path.join(tmpdir, f"{getpid()}.cnf")
-                        self.formula.to_file(enc_file)
-
-                    p = subprocess.Popen(["bin/roundingsat", "--print-sol=1", enc_file], stdout=subprocess.PIPE)
-                    r = p.communicate()[0].decode("utf-8")
-                    model = None
-                    for cline in r.splitlines():
-                        if cline.startswith("v"):
-                            model = [int(x.replace("x", "")) for x in cline.split()[1:]]
-                            best_model = self.decode(model, htd, m, n)
-
-                    if model:
-                        ub = c_bound
-                        c_bound -= 1
-                    else:
-                        c_lb = c_bound + 1
-                        c_bound += 1
-            return best_model
+        return best_model
 
     def decode(self, model, htd, m, n):
         model = {abs(x): x > 0 for x in model}
@@ -300,3 +333,4 @@ class HtdSatEncoding:
                 for j in clique:
                     if i < j:
                         self._add_clause(self.ord[i][j])
+
