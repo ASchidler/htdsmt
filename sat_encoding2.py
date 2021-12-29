@@ -40,24 +40,12 @@ class HtdSatEncoding2:
                 self.ord[i][j] = self.pool.id(f"ord{i}_{j}")
                 self.ord[j][i] = -1 * self.ord[i][j]
 
-        for i in range(1, n + 1):
-            for j in range(i + 1, n + 1):
-                self.eq[i][j] = self.pool.id(f"eq{i}_{j}")
-                self.eq[j][i] = self.pool.id(f"eq{i}_{j}")
-
         # arcs
         for i in range(1, n + 1):
             for j in range(1, n + 1):
                 if i != j:
                     # declare arc_ij variables
                     self.arc[i][j] = self.pool.id(f"arc{i}_{j}")
-
-        # arcsp
-        for i in range(1, n + 1):
-            for j in range(1, n + 1):
-                if i != j:
-                    # declare arc_ij variables
-                    self.arcp[i][j] = self.pool.id(f"arcp{i}_{j}")
 
         # weights
         for j in range(1, n + 1):
@@ -66,8 +54,16 @@ class HtdSatEncoding2:
 
         if htd:
             for i in range(1, n + 1):
-                for j in range(i+1, n + 1):
+                for j in range(i + 1, n + 1):
                     self.eq[i][j] = self.pool.id(f"eq{i}_{j}")
+                    self.eq[j][i] = self.pool.id(f"eq{i}_{j}")
+
+            # arcsp
+            for i in range(1, n + 1):
+                for j in range(1, n + 1):
+                    if i != j:
+                        # declare arc_ij variables
+                        self.arcp[i][j] = self.pool.id(f"arcp{i}_{j}")
 
     def elimination_ordering(self, htd):
         n = self.hypergraph.number_of_nodes()

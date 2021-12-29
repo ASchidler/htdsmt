@@ -4,7 +4,7 @@ from networkx import Graph
 from networkx.algorithms.approximation import max_clique
 from networkx.algorithms.clique import find_cliques
 
-import smt_encoding
+import smt_encoding, smt_encoding2
 from lib.htd_validate.htd_validate.utils.hypergraph import Hypergraph
 
 """Starts the correct solver and returns the solver result"""
@@ -42,7 +42,7 @@ def solve(input_file, clique_mode=0, htd=True, lb=None, fix_val=None, sb=False, 
     # if fix_val is None and ub is None:
     #     ub = ubs.greedy(hypergraph, htd) if not weighted else wub.greedy(hypergraph)
     #     print(ub)
-    enc = smt_encoding.HtdSmtEncoding(hypergraph, use_z3=use_z3)
+    enc = smt_encoding2.HtdSmtEncoding(hypergraph, use_z3=use_z3)
     res = enc.solve(htd=htd, fix_val=fix_val, clique=clique, lb=lb, ub=ub, sb=sb)
 
     return res
