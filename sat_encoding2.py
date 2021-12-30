@@ -71,11 +71,17 @@ class HtdSatEncoding2:
         # # Some improvements
         for i in range(1, n + 1):
             for j in range(i + 1, n + 1):
-                # Arcs cannot go in both directions
-                self._add_clause(-self.arc[j][i], -self.arc[i][j])
-                # Enforce arc direction from smaller to bigger ordered vertex
-                self._add_clause(-self.ord[i][j], -self.arc[j][i])
-                self._add_clause(-self.ord[j][i], -self.arc[i][j])
+                if not htd:
+                    # Arcs cannot go in both directions
+                    # Enforce arc direction from smaller to bigger ordered vertex
+                    self._add_clause(-self.arc[j][i], -self.arc[i][j])
+                    self._add_clause(-self.ord[i][j], -self.arc[j][i])
+                    self._add_clause(-self.ord[j][i], -self.arc[i][j])
+                else:
+                    self._add_clause(self.eq[i][j], -self.arc[j][i], -self.arc[i][j])
+                    self._add_clause(-self.ord[i][j], self.eq[i][j], -self.arc[j][i])
+                    self._add_clause(-self.ord[j][i], self.eq[i][j], -self.arc[i][j])
+
 
         for i in range(1, n + 1):
             for j in range(1, n + 1):
@@ -132,27 +138,27 @@ class HtdSatEncoding2:
                         if i != k and j != k:
                             self._add_clause(-self.arcp[i][j], -self.arcp[j][k], self.arcp[i][k])
 
-        for i in range(1, n+1):
-            for j in range(1, n+1):
-                if i != j:
-                    for e in range(1, self.hypergraph.number_of_edges()+1):
-                        self._add_clause(-self.eq[i][j], -self.weight[i][e], self.weight[j][e])
-
-        for i in range(1, n+1):
-            for j in range(i+1, n+1):
-                self._add_clause(-self.eq[i][j], self.ord[i][j])
-
-        for i in range(1, n+1):
+        # Special Condition
+        for i in range(1, n + 1):
             for j in range(1, n + 1):
                 if i != j:
                     for e in self.hypergraph.incident_edges(i):
                         self._add_clause(-self.arcp[i][j], -self.weight[j][e], self.eq[i][j])
 
+        # # Symmetry breaking
+        # for i in range(1, n+1):
+        #     for j in range(i+1, n+1):
+        #         self._add_clause(-self.eq[i][j], self.ord[i][j])
+
+        # Specify eq
         for i in range(1, n+1):
             for j in range(1, n+1):
+                if i != j:
+                    self._add_clause(-self.eq[i][j], self.arc[i][j])
                 for k in range(1, n + 1):
                     if i != j and i != k and j != k:
                         self._add_clause(-self.eq[i][j], -self.eq[j][k], self.eq[i][k])
+                        self._add_clause(-self.eq[i][j], -self.arc[j][k], self.arc[i][k])
 
     def _encode_cardinality(self, ub, m, n):
         tots = []

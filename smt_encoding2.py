@@ -103,7 +103,7 @@ class HtdSmtEncoding:
         #         m = re.search("([a-z])_", formula)
         #     self.log_file.write(formula + "\n")
 
-    def prepare_vars(self):
+    def prepare_vars(self, htd):
         n = self.hypergraph.number_of_nodes()
         m = self.hypergraph.number_of_edges()
 
@@ -131,6 +131,19 @@ class HtdSmtEncoding:
                 # self.stream.write("(assert (or (= weight_{i}_e{ej} 0) (= weight_{i}_e{ej} 1)))\n".format(i=j, ej=ej))
                 self._add_formula(self._create_seq(self.weight[j][ej], 1))
                 self._add_formula(self._create_seq(0, self.weight[j][ej]))
+
+        if htd:
+            for i in range(1, n + 1):
+                for j in range(i + 1, n + 1):
+                    self.eq[i][j] = self._add_var(f"eq{i}_{j}")
+                    self.eq[j][i] = self._add_var(f"eq{i}_{j}")
+
+            # arcsp
+            for i in range(1, n + 1):
+                for j in range(1, n + 1):
+                    if i != j:
+                        # declare arc_ij variables
+                        self.arcp[i][j] = self._add_var(f"arcp{i}_{j}")
 
     def _add_clause(self, *C):
         if self.use_z3:
@@ -164,15 +177,20 @@ class HtdSmtEncoding:
             weights = self._create_sum(weights)
             self._add_formula(self._create_seq(weights, self.m))
 
-    def elimination_ordering(self, n):
+    def elimination_ordering(self, n, htd):
         # Some improvements
         for i in range(1, n + 1):
             for j in range(i+1, n + 1):
-                # Arcs cannot go in both directions
-                self._add_clause(self._neg(self.arc[j][i]), self._neg(self.arc[i][j]))
-                # Enforce arc direction from smaller to bigger ordered vertex
-                self._add_clause(self._neg(self.ord[i][j]), self._neg(self.arc[j][i]))
-                self._add_clause(self._neg(self.ord[j][i]), self._neg(self.arc[i][j]))
+                if not htd:
+                    # Arcs cannot go in both directions
+                    self._add_clause(self._neg(self.arc[j][i]), self._neg(self.arc[i][j]))
+                    # Enforce arc direction from smaller to bigger ordered vertex
+                    self._add_clause(self._neg(self.ord[i][j]), self._neg(self.arc[j][i]))
+                    self._add_clause(self._neg(self.ord[j][i]), self._neg(self.arc[i][j]))
+                else:
+                    self._add_clause(self.eq[i][j], self._neg(self.arc[j][i]), self._neg(self.arc[i][j]))
+                    self._add_clause(self._neg(self.ord[i][j]), self.eq[i][j], self._neg(self.arc[j][i]))
+                    self._add_clause(self._neg(self.ord[j][i]), self.eq[i][j], self._neg(self.arc[i][j]))
 
         for i in range(1, n + 1):
             for j in range(1, n + 1):
@@ -252,14 +270,14 @@ class HtdSmtEncoding:
         n = self.hypergraph.number_of_nodes()
 
         self.break_clique(clique=clique, htd=htd)
-        self.elimination_ordering(n)
+        self.elimination_ordering(n, htd)
         self.cover(n)
 
         if htd:
             self.encode_htd(n)
 
     def solve(self, clique=None, htd=True, lb=None, ub=None, fix_val=None, sb=False):
-        self.prepare_vars()
+        self.prepare_vars(htd)
 
         if self.use_z3:
             if fix_val:
@@ -435,18 +453,6 @@ class HtdSmtEncoding:
 
     def encode_htd(self, n):
         # # Whenever a tree node covers an edge, it covers all the edge's vertices
-        for i in range(1, n + 1):
-            for j in range(i + 1, n + 1):
-                self.eq[i][j] = self._add_var(f"eq{i}_{j}")
-                self.eq[j][i] = self._add_var(f"eq{i}_{j}")
-
-        # arcsp
-        for i in range(1, n + 1):
-            for j in range(1, n + 1):
-                if i != j:
-                    # declare arc_ij variables
-                    self.arcp[i][j] = self._add_var(f"arcp{i}_{j}")
-
         n = self.hypergraph.number_of_nodes()
 
         for i in range(1, n + 1):
@@ -460,21 +466,19 @@ class HtdSmtEncoding:
         for i in range(1, n + 1):
             for j in range(1, n + 1):
                 if i != j:
-                    for e in range(1, self.hypergraph.number_of_edges() + 1):
-                        self._add_clause(self._neg(self.eq[i][j]), f"(= {self.weight[i][e]} 0)", f"(= {self.weight[j][e]} 1)")
+                    for e in self.hypergraph.incident_edges(i):
+                        self._add_clause(self._neg(self.arcp[i][j]), f"(= {self.weight[j][e]} 0)", self.eq[i][j])
 
-        for i in range(1, n + 1):
-            for j in range(i + 1, n + 1):
-                self._add_clause(self._neg(self.eq[i][j]), self.ord[i][j])
+        # for i in range(1, n + 1):
+        #     for j in range(i + 1, n + 1):
+        #         self._add_clause(self._neg(self.eq[i][j]), self.ord[i][j])
 
         for i in range(1, n + 1):
             for j in range(1, n + 1):
                 if i != j:
-                    for e in self.hypergraph.incident_edges(i):
-                        self._add_clause(self._neg(self.arcp[i][j]), f"(= {self.weight[j][e]} 0)", self.eq[i][j])
+                    self._add_clause(self._neg(self.eq[i][j]), self.arc[i][j])
 
-        for i in range(1, n + 1):
-            for j in range(1, n + 1):
                 for k in range(1, n + 1):
                     if i != j and i != k and j != k:
+                        self._add_clause(self._neg(self.eq[i][j]), self._neg(self.arc[j][k]), self.arc[i][k])
                         self._add_clause(self._neg(self.eq[i][j]), self._neg(self.eq[j][k]), self.eq[i][k])

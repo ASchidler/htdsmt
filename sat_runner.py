@@ -67,7 +67,7 @@ if clique_mode > 0:
         clique = max(find_cliques(pv), key=lambda x: len(x))
 
 #encoder = HtdSatEncoding(hypergraph_in)
-encoder = HtdSatEncoding(hypergraph_in)
+encoder = HtdSatEncoding2(hypergraph_in)
 
 res = encoder.solve(current_bound, not args.ghtd, solver, sb=args.sb, incremental=args.incr, enc_type=args.card, clique=clique,
                     maxsat=args.maxsat, tmpdir=args.tmpdir)
