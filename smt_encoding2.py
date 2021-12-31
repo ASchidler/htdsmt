@@ -365,39 +365,11 @@ class HtdSmtEncoding:
                                                         weights=weights)
 
             if htd:
-                for i in range(1, self.hypergraph.number_of_nodes()+1):
+                for i in range(1, self.hypergraph.number_of_nodes() + 1):
                     for j in range(1, self.hypergraph.number_of_nodes() + 1):
-                        if i != j and arcs[i][j]:
-                            htdd.bags[i].add(j)
-
-                htdd.tree = nx.DiGraph()
-                for i in range(0, len(ordering)):
-                    n = ordering[i]
-                    for j in range(i+1, len(ordering)):
-                        v = ordering[j]
-                        if arcs[n][v]:
-                            htdd.tree.add_edge(v, n)
-                            break
-
-                # TODO: This is really inefficient
-                root = [n for n in htdd.tree.nodes if len(list(htdd.tree.predecessors(n))) == 0][0]
-                q = [root]
-                while q:
-                    n = q.pop()
-                    q.extend(list(htdd.tree.successors(n)))
-                    desc = set(nx.descendants(htdd.tree, n))
-
-                    # Omitted intersected with descendants
-                    problem = (htdd._B(n) - htdd.bags[n]) & desc
-                    while problem:
-                        d = problem.pop()
-                        pth = nx.shortest_path(htdd.tree, source=n, target=d)
-                        pth.pop()
-                        while pth:
-                            c_node = pth.pop()
-
-                            # We know that every bag on the bath from n to d is a subset of d
-                            htdd.bags[c_node].update(htdd.bags[d])
+                        if i != j and ordering.index(i) > ordering.index(j):
+                            if arcs[i][j]:
+                                htdd.bags[i].add(j)
 
             return DecompositionResult(htdd.width(), htdd, arcs, ordering, weights)
         except RuntimeError:
@@ -469,10 +441,6 @@ class HtdSmtEncoding:
                     for e in self.hypergraph.incident_edges(i):
                         self._add_clause(self._neg(self.arcp[i][j]), f"(= {self.weight[j][e]} 0)", self.eq[i][j])
 
-        # for i in range(1, n + 1):
-        #     for j in range(i + 1, n + 1):
-        #         self._add_clause(self._neg(self.eq[i][j]), self.ord[i][j])
-
         for i in range(1, n + 1):
             for j in range(1, n + 1):
                 if i != j:
@@ -480,5 +448,5 @@ class HtdSmtEncoding:
 
                 for k in range(1, n + 1):
                     if i != j and i != k and j != k:
-                        self._add_clause(self._neg(self.eq[i][j]), self._neg(self.arc[j][k]), self.arc[i][k])
                         self._add_clause(self._neg(self.eq[i][j]), self._neg(self.eq[j][k]), self.eq[i][k])
+                        self._add_clause(self._neg(self.eq[i][k]), self._neg(self.arcp[i][j]), self._neg(self.arcp[j][k]), self.eq[i][j])

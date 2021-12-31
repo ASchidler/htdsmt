@@ -79,8 +79,8 @@ class HtdSatEncoding2:
                     self._add_clause(-self.ord[j][i], -self.arc[i][j])
                 else:
                     self._add_clause(self.eq[i][j], -self.arc[j][i], -self.arc[i][j])
-                    self._add_clause(-self.ord[i][j], self.eq[i][j], -self.arc[j][i])
-                    self._add_clause(-self.ord[j][i], self.eq[i][j], -self.arc[i][j])
+                    self._add_clause(self.eq[i][j], -self.ord[i][j], -self.arc[j][i])
+                    self._add_clause(self.eq[i][j], -self.ord[j][i], -self.arc[i][j])
 
 
         for i in range(1, n + 1):
@@ -145,11 +145,6 @@ class HtdSatEncoding2:
                     for e in self.hypergraph.incident_edges(i):
                         self._add_clause(-self.arcp[i][j], -self.weight[j][e], self.eq[i][j])
 
-        # # Symmetry breaking
-        # for i in range(1, n+1):
-        #     for j in range(i+1, n+1):
-        #         self._add_clause(-self.eq[i][j], self.ord[i][j])
-
         # Specify eq
         for i in range(1, n+1):
             for j in range(1, n+1):
@@ -158,7 +153,7 @@ class HtdSatEncoding2:
                 for k in range(1, n + 1):
                     if i != j and i != k and j != k:
                         self._add_clause(-self.eq[i][j], -self.eq[j][k], self.eq[i][k])
-                        self._add_clause(-self.eq[i][j], -self.arc[j][k], self.arc[i][k])
+                        self._add_clause(-self.eq[i][k], -self.arcp[i][j], -self.arcp[j][k], self.eq[i][j])
 
     def _encode_cardinality(self, ub, m, n):
         tots = []
@@ -302,24 +297,29 @@ class HtdSatEncoding2:
 
         weights = {x: {ej: 1 if model[self.weight[x][ej]] else 0 for ej in range(1, m+1)} for x in range(1, n+1)}
         arcs = {x: {y: model[self.arc[x][y]] for y in range(1, n+1) if x != y} for x in range(1, n+1)}
-        eq = {x: {y: model[self.eq[x][y]] for y in range(x+1, n+1)} for x in range(1, n+1)}
 
         htdd = HypertreeDecomposition.from_ordering(hypergraph=self.hypergraph, ordering=ordering,
                                                     weights=weights)
 
         if htd:
             for i in range(1, self.hypergraph.number_of_nodes() + 1):
-                equivs = []
-                new_bag = set(htdd.bags[i])
-                for j in range(i+1, self.hypergraph.number_of_nodes() + 1):
-                    if eq[i][j]:
-                        new_bag.update(htdd.bags[j])
-                        equivs.append(j)
+                for j in range(1, self.hypergraph.number_of_nodes() + 1):
+                    if i != j and ordering.index(i) > ordering.index(j):
+                        if arcs[i][j]:
+                            htdd.bags[i].add(j)
 
-                if len(equivs) > 0:
-                    htdd.bags[i] = new_bag
-                    for j in equivs:
-                        htdd.bags[j] = new_bag
+                #
+                # equivs = []
+                # new_bag = set(htdd.bags[i])
+                # for j in range(i+1, self.hypergraph.number_of_nodes() + 1):
+                #     if eq[i][j]:
+                #         new_bag.update(htdd.bags[j])
+                #         equivs.append(j)
+                #
+                # if len(equivs) > 0:
+                #     htdd.bags[i] = new_bag
+                #     for j in equivs:
+                #         htdd.bags[j] = new_bag
 
         return DecompositionResult(htdd.width(), htdd, arcs, ordering, weights)
 
