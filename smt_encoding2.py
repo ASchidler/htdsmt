@@ -2,6 +2,9 @@ from __future__ import absolute_import
 from functools import cmp_to_key
 import re
 from itertools import combinations
+
+import networkx as networkx
+
 from lib.htd_validate.htd_validate.decompositions import HypertreeDecomposition
 from decomposition_result import DecompositionResult
 from bounds import upper_bounds
@@ -360,16 +363,25 @@ class HtdSmtEncoding:
             ordering = self._get_ordering(model)
             weights = self._get_weights(model, ordering)
             arcs = self._get_arcs(model)
+            eq = {x: {y: model[self.eq[x][y]] for y in range(1, len(ordering) + 1) if x != y} for x in range(1, len(ordering) + 1)}
 
             htdd = HypertreeDecomposition.from_ordering(hypergraph=self.hypergraph, ordering=ordering,
                                                         weights=weights)
 
             if htd:
-                for i in range(1, self.hypergraph.number_of_nodes() + 1):
-                    for j in range(1, self.hypergraph.number_of_nodes() + 1):
-                        if i != j and ordering.index(i) > ordering.index(j):
-                            if arcs[i][j]:
-                                htdd.bags[i].add(j)
+                for i in range(0, len(ordering)):
+                    n = ordering[i]
+                    for j in range(i + 1, len(ordering)):
+                        n2 = ordering[j]
+                        if eq[n][n2] and any(
+                                n in self.hypergraph.get_edge(e) for e, v in htdd.hyperedge_function[n2].items() if
+                                v > 0):
+                            try:
+                                pth = networkx.shortest_path(htdd.tree, source=n2, target=n)
+                                for n3 in pth:
+                                    htdd.bags[n3].add(n)
+                            except networkx.NetworkXNoPath:
+                                pass
 
             return DecompositionResult(htdd.width(), htdd, arcs, ordering, weights)
         except RuntimeError:
@@ -430,7 +442,7 @@ class HtdSmtEncoding:
         for i in range(1, n + 1):
             for j in range(1, n + 1):
                 if i != j:
-                    self._add_clause(self._neg(self.arc[i][j]), self.arcp[i][j])
+                    self._add_clause(self._neg(self.arc[i][j]), self._neg(self.ord[i][j]), self.arcp[i][j])
                     for k in range(1, n + 1):
                         if i != k and j != k:
                             self._add_clause(self._neg(self.arcp[i][j]), self._neg(self.arcp[j][k]), self.arcp[i][k])
