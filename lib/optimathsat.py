@@ -287,7 +287,8 @@ MSAT_TAG_FP_CAST = _mathsat.MSAT_TAG_FP_CAST
 MSAT_TAG_FP_ROUND_TO_INT = _mathsat.MSAT_TAG_FP_ROUND_TO_INT
 MSAT_TAG_FP_FROM_SBV = _mathsat.MSAT_TAG_FP_FROM_SBV
 MSAT_TAG_FP_FROM_UBV = _mathsat.MSAT_TAG_FP_FROM_UBV
-MSAT_TAG_FP_TO_BV = _mathsat.MSAT_TAG_FP_TO_BV
+MSAT_TAG_FP_TO_SBV = _mathsat.MSAT_TAG_FP_TO_SBV
+MSAT_TAG_FP_TO_UBV = _mathsat.MSAT_TAG_FP_TO_UBV
 MSAT_TAG_FP_AS_IEEEBV = _mathsat.MSAT_TAG_FP_AS_IEEEBV
 MSAT_TAG_FP_ISNAN = _mathsat.MSAT_TAG_FP_ISNAN
 MSAT_TAG_FP_ISINF = _mathsat.MSAT_TAG_FP_ISINF
@@ -824,9 +825,17 @@ def msat_make_fp_cast(e, exp_w, mant_w, rounding, t):
     """msat_make_fp_cast(msat_env e, size_t exp_w, size_t mant_w, msat_term rounding, msat_term t) -> msat_term"""
     return _mathsat.msat_make_fp_cast(e, exp_w, mant_w, rounding, t)
 
+def msat_make_fp_to_sbv(e, width, rounding, t):
+    """msat_make_fp_to_sbv(msat_env e, size_t width, msat_term rounding, msat_term t) -> msat_term"""
+    return _mathsat.msat_make_fp_to_sbv(e, width, rounding, t)
+
 def msat_make_fp_to_bv(e, width, rounding, t):
     """msat_make_fp_to_bv(msat_env e, size_t width, msat_term rounding, msat_term t) -> msat_term"""
     return _mathsat.msat_make_fp_to_bv(e, width, rounding, t)
+
+def msat_make_fp_to_ubv(e, width, rounding, t):
+    """msat_make_fp_to_ubv(msat_env e, size_t width, msat_term rounding, msat_term t) -> msat_term"""
+    return _mathsat.msat_make_fp_to_ubv(e, width, rounding, t)
 
 def msat_make_fp_from_sbv(e, exp_w, mant_w, rounding, t):
     """msat_make_fp_from_sbv(msat_env e, size_t exp_w, size_t mant_w, msat_term rounding, msat_term t) -> msat_term"""
@@ -1236,9 +1245,17 @@ def msat_term_is_fp_cast(e, t):
     """msat_term_is_fp_cast(msat_env e, msat_term t) -> int"""
     return _mathsat.msat_term_is_fp_cast(e, t)
 
+def msat_term_is_fp_to_sbv(e, t):
+    """msat_term_is_fp_to_sbv(msat_env e, msat_term t) -> int"""
+    return _mathsat.msat_term_is_fp_to_sbv(e, t)
+
 def msat_term_is_fp_to_bv(e, t):
     """msat_term_is_fp_to_bv(msat_env e, msat_term t) -> int"""
     return _mathsat.msat_term_is_fp_to_bv(e, t)
+
+def msat_term_is_fp_to_ubv(e, t):
+    """msat_term_is_fp_to_ubv(msat_env e, msat_term t) -> int"""
+    return _mathsat.msat_term_is_fp_to_ubv(e, t)
 
 def msat_term_is_fp_from_sbv(e, t):
     """msat_term_is_fp_from_sbv(msat_env e, msat_term t) -> int"""
@@ -2163,6 +2180,16 @@ def MSAT_ERROR_OBJECTIVE_ITERATOR(i):
     return _mathsat.MSAT_ERROR_OBJECTIVE_ITERATOR(i)
 
 
+import sys
+
+if sys.version_info[0] >= 3:
+    def _enc(s):
+        if isinstance(s, str): s = s.encode('ascii')
+        return s
+else:
+    def _enc(s): return s        
+
+
 def msat_parse_config(data_or_file):
     if hasattr(data_or_file, 'read'):
         data_or_file = data_or_file.read()
@@ -2303,10 +2330,12 @@ def msat_named_list_from_smtlib2_file(env, f):
 
 
 def msat_named_list_to_smtlib2(env, names, terms):
+    names = [_enc(n) for n in names]
     return _msat_named_list_to_smtlib2(env, len(names), names, terms)
 
 
 def msat_named_list_to_smtlib2_file(env, names, terms, out):
+    names = [_enc(n) for n in names]
     data = msat_named_list_to_smtlib2(env, names, terms)
     out.write(data)
 
@@ -2320,10 +2349,12 @@ def msat_annotated_list_from_smtlib2_file(env, f):
 
 
 def msat_annotated_list_to_smtlib2(env, terms, annots):
+    annots = [_enc(n) for n in annots]
     return _msat_annotated_list_to_smtlib2(env, len(terms), terms, annots)
 
 
 def msat_annotated_list_to_smtlib2_file(env, terms, annots, out):
+    annots = [_enc(n) for n in annots]
     data = msat_annotated_list_to_smtlib2(env, terms, annots)
     out.write(data)
 
@@ -2391,7 +2422,7 @@ def msat_apply_substitution(env, term, to_subst, values=None):
                 to_subst.append(k)
                 values.append(v)
         else:
-# assume m is a sequence of (k, v) pairs
+## assume m is a sequence of (k, v) pairs
             for (k, v) in m:
                 to_subst.append(k)
                 values.append(v)
@@ -2404,6 +2435,9 @@ def msat_simplify(env, formula, to_protect):
 
 def msat_aig_encode(mgr, term):
     return _msat_aig_encode(mgr, term, 0)
+
+
+MSAT_TAG_FP_TO_BV = MSAT_TAG_FP_TO_SBV        
 
 ###
 ### OMT Environment

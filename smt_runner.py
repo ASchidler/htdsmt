@@ -25,6 +25,7 @@ parser.add_argument('-v', dest='verbose', action='store_false', default=True, he
 parser.add_argument('-b', dest="sb", default=False, action='store_true', help="Activate symmetry breaking")
 parser.add_argument('-z', dest="z3", default=False, action='store_true', help="Use Z3 solver instead of optimathsat")
 parser.add_argument('-q', dest="clique", default=0, type=int, action='store', help="Clique mode, 0 is disabled")
+parser.add_argument('-e', dest="encoding", default=0, type=int, choices=[0, 1])
 
 args = parser.parse_args()
 
@@ -35,10 +36,10 @@ fl = 'solve_runner'
 
 # Compute solution for GHTD
 if args.ghtd:
-    res = solver.solve(args.graph, htd=False, clique_mode=args.clique, sb=args.sb)
+    res = solver.solve(args.graph, htd=False, clique_mode=args.clique, sb=args.sb, use_z3=args.z3, encoding=args.encoding)
     td = res.decomposition if res is not None else None
 else:
-    res = solver.solve(args.graph, htd=True, clique_mode=args.clique, sb=args.sb)
+    res = solver.solve(args.graph, htd=True, clique_mode=args.clique, sb=args.sb, use_z3=args.z3, encoding=args.encoding)
     td = res.decomposition if res is not None else None
 
 # Display result if available
