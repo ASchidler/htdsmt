@@ -8,7 +8,7 @@ from networkx import Graph
 from itertools import combinations
 from networkx.algorithms.approximation import max_clique
 from networkx.algorithms.clique import find_cliques
-from pysat.solvers import Glucose3, Glucose4, Lingeling, Cadical, Minisat22, Maplesat
+from pysat.solvers import Glucose3, Glucose4, Lingeling, Cadical, Minisat22, Maplesat, Gluecard3, Gluecard4, Mergesat3, MapleCM, MapleChrono, Minicard
 
 import bounds.upper_bounds as bnd
 from lib.htd_validate.htd_validate.utils.hypergraph import Hypergraph
@@ -21,7 +21,7 @@ parser.add_argument('graph', metavar='graph_file', type=str,
 parser.add_argument('-g', dest='ghtd', action='store_true', default=False,
                     help='Compute a GHTD instead of a HTD')
 
-parser.add_argument('-s', dest="solver", default='0', type=int, help='The solver to use')
+parser.add_argument('-s', dest="solver", default=0, type=int, help='The solver to use')
 parser.add_argument('-b', dest="sb", default=False, action='store_true', help="Activate symmetry breaking")
 parser.add_argument('-i', dest="incr", default=False, action="store_true", help="Activate incremental solving")
 parser.add_argument('-c', dest="card", default=6, type=int, help="The cardinality encoding to use for non-incremental solving")
@@ -31,15 +31,23 @@ parser.add_argument('-m', dest="maxsat", default=False, action="store_true", hel
 parser.add_argument('-e', dest="encoding", default=0, type=int, choices=[0, 1])
 args = parser.parse_args()
 
+
 # The solver to use
 solvers = [
-    lambda: Glucose4(incr=True),
-    lambda: Glucose3(incr=True),
+    Glucose4,
+    Glucose3,
     Lingeling,
     Cadical,
     Minisat22,
-    Maplesat
+    Maplesat,
+    MapleCM,
+    MapleChrono,
+    Mergesat3,
+    Gluecard4,
+    Gluecard3,
+    Minicard
 ]
+
 solver = solvers[args.solver]
 
 input_file = args.graph
