@@ -25,7 +25,7 @@ parser.add_argument('-v', dest='verbose', action='store_false', default=True, he
 parser.add_argument('-b', dest="sb", default=False, action='store_true', help="Activate symmetry breaking")
 parser.add_argument('-z', dest="z3", default=False, action='store_true', help="Use Z3 solver instead of optimathsat")
 parser.add_argument('-q', dest="clique", default=0, type=int, action='store', help="Clique mode, 0 is disabled")
-parser.add_argument('-e', dest="encoding", default=0, type=int, choices=[0, 1])
+parser.add_argument('-e', dest="encoding", default=0, type=int, choices=[0, 1], help="Encoding to use, 0=Pure, 1=Augmented")
 
 args = parser.parse_args()
 

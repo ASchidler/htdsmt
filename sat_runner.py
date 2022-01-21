@@ -28,7 +28,8 @@ parser.add_argument('-c', dest="card", default=6, type=int, help="The cardinalit
 parser.add_argument('-q', dest="clique", default=0, type=int, help="The clique mode (0: off, 1: approx, 2: max cliques)")
 parser.add_argument('-t', dest="tmpdir", default="/tmp", type=str, help="The temporary directory to use")
 parser.add_argument('-m', dest="maxsat", default=False, action="store_true", help="Use MaxSAT")
-parser.add_argument('-e', dest="encoding", default=0, type=int, choices=[0, 1])
+parser.add_argument('-x', dest="external", default=None, action="store", type=str, help="Path to external solver")
+parser.add_argument('-e', dest="encoding", default=0, type=int, choices=[0, 1], help="Encoding to use, 0=HtdLEO, 1=HtdEq")
 args = parser.parse_args()
 
 
@@ -78,7 +79,7 @@ if clique_mode > 0:
 encoder = HtdSatEncoding(hypergraph_in) if args.encoding == 0 else HtdSatEncoding2(hypergraph_in)
 
 res = encoder.solve(current_bound, not args.ghtd, solver, sb=args.sb, incremental=args.incr, enc_type=args.card, clique=clique,
-                    maxsat=args.maxsat, tmpdir=args.tmpdir)
+                    maxsat=args.maxsat, tmpdir=args.tmpdir, external=args.external)
 
 valid = res.decomposition.validate(res.decomposition.hypergraph)
 valid_ghtd = GeneralizedHypertreeDecomposition.validate(res.decomposition, res.decomposition.hypergraph)

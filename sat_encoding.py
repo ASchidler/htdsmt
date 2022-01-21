@@ -261,11 +261,16 @@ class HtdSatEncoding:
             enc_file = path.join(tmpdir, f"{getpid()}.cnf")
             maxsat_clauses.to_file(enc_file)
 
-            p = subprocess.Popen(["bin/uwrmaxsat", "-m", enc_file], stdout=subprocess.PIPE)
+            #p = subprocess.Popen(["bin/uwrmaxsat", "-m", enc_file], stdout=subprocess.PIPE)
+            p = subprocess.Popen(["bin/maxhs", "-no-printSoln-new-format", "-printBstSoln", "-printSoln", enc_file],
+                                 stdout=subprocess.PIPE)
             r = p.communicate()[0].decode("utf-8")
             for cline in r.splitlines():
                 if cline.startswith("v"):
+                    # Uwrmaxsat
                     model = [int(x.replace("x", "")) for x in cline.split()[1:]]
+                    # # MaxHS
+                    # model = [(ix+1) * (1 if int(x) > 0 else - 1) for ix, x in enumerate(cline[1:].strip())]
                     return self.decode(model, htd, m, n)
 
     def decode(self, model, htd, m, n):
