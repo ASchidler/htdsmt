@@ -177,7 +177,7 @@ class HtdSatEncoding:
 
             self.formula.append(clause)
 
-    def solve(self, ub, htd, solver, incremental=True, enc_type=EncType.totalizer, sb=False, clique=None, maxsat=False, tmpdir=None):
+    def solve(self, ub, htd, solver, incremental=True, enc_type=EncType.totalizer, sb=False, clique=None, maxsat=False, tmpdir=None, external=None):
         n = self.hypergraph.number_of_nodes()
         m = self.hypergraph.number_of_edges()
         self._init_vars(htd)
@@ -226,19 +226,46 @@ class HtdSatEncoding:
 
             while c_lb < ub:
                 with solver() as slv:
-                    slv.append_formula(self.formula)
+                    if external is None:
+                        slv.append_formula(self.formula)
+                    else:
+                        adapted = CNF(from_clauses=self.formula.clauses)
+
                     c_top = self.pool.top
                     for i in range(1, n + 1):
                         lits = [self.weight[i][ej] for ej in range(1, m + 1)]
 
                         constr = CardEnc.atmost(lits, bound=c_bound, top_id=c_top, encoding=enc_type)
                         c_top = constr.nv
-                        slv.append_formula(constr)
+                        if external is None:
+                            slv.append_formula(constr)
+                        else:
+                            adapted.extend(constr)
 
-                    if slv.solve():
+                    solved = False
+                    if external is not None:
+                        enc_file = path.join(tmpdir, f"{getpid()}.cnf")
+                        adapted.to_file(enc_file)
+                        external_path = external.split(" ")
+                        p = subprocess.Popen(
+                            [*external_path, enc_file],
+                            stdout=subprocess.PIPE)
+                        r = p.communicate()[0].decode("utf-8")
+                        model = []
+                        for cline in r.splitlines():
+                            if cline.startswith("v"):
+                                model.extend(int(x) for x in cline.split()[1:])
+                        if len(model) > 0:
+                            best_model = self.decode(model, htd, m, n)
+                            solved = True
+                    else:
+                        solved = slv.solve()
+                        if solved:
+                            best_model = self.decode(slv.get_model(), htd, m, n)
+
+                    if solved:
                         ub = c_bound
                         c_bound -= 1
-                        best_model = self.decode(slv.get_model(), htd, m, n)
                     else:
                         c_lb = c_bound + 1
                         c_bound += 1
