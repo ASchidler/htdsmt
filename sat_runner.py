@@ -8,7 +8,7 @@ from networkx import Graph
 from itertools import combinations
 from networkx.algorithms.approximation import max_clique
 from networkx.algorithms.clique import find_cliques
-from pysat.solvers import Glucose3, Glucose4, Lingeling, Cadical, Minisat22, Maplesat, Gluecard3, Gluecard4, Mergesat3, MapleCM, MapleChrono, Minicard
+from pysat.solvers import Glucose3, Glucose4, Lingeling, Cadical153, Minisat22, Maplesat, Gluecard3, Gluecard4, Mergesat3, MapleCM, MapleChrono, Minicard
 
 import bounds.upper_bounds as bnd
 from lib.htd_validate.htd_validate.utils.hypergraph import Hypergraph
@@ -30,15 +30,21 @@ parser.add_argument('-t', dest="tmpdir", default="/tmp", type=str, help="The tem
 parser.add_argument('-m', dest="maxsat", default=False, action="store_true", help="Use MaxSAT")
 parser.add_argument('-x', dest="external", default=None, action="store", type=str, help="Path to external solver")
 parser.add_argument('-e', dest="encoding", default=0, type=int, choices=[0, 1], help="Encoding to use, 0=HtdLEO, 1=HtdEq")
+parser.add_argument('-j', dest="enc_file", default=None, type=str, help="The path to store the encoding file at (requires -m).")
+parser.add_argument('-p', dest="separate_cards", default=False, action="store_true", help="Store cardinalities separately (requires -m and -f).")
 args = parser.parse_args()
 
+if args.enc_file is not None and not args.maxsat:
+    raise RuntimeError("Encoding export requires -m.")
+if args.separate_cards and args.enc_file is None:
+    raise RuntimeError("Cardinality separation requires -j.")
 
 # The solver to use
 solvers = [
     Glucose4,
     Glucose3,
     Lingeling,
-    Cadical,
+    Cadical153,
     Minisat22,
     Maplesat,
     MapleCM,
@@ -79,7 +85,7 @@ if clique_mode > 0:
 encoder = HtdSatEncoding(hypergraph_in) if args.encoding == 0 else HtdSatEncoding2(hypergraph_in)
 
 res = encoder.solve(current_bound, not args.ghtd, solver, sb=args.sb, incremental=args.incr, enc_type=args.card, clique=clique,
-                    maxsat=args.maxsat, tmpdir=args.tmpdir, external=args.external)
+                    maxsat=args.maxsat, tmpdir=args.tmpdir, external=args.external, enc_file=args.enc_file, export_cards=args.separate_cards)
 
 valid = res.decomposition.validate(res.decomposition.hypergraph)
 valid_ghtd = GeneralizedHypertreeDecomposition.validate(res.decomposition, res.decomposition.hypergraph)

@@ -1,3 +1,4 @@
+import os
 from itertools import combinations
 from pysat.formula import IDPool, CNF, WCNF
 from pysat.card import ITotalizer, CardEnc, EncType
@@ -177,7 +178,7 @@ class HtdSatEncoding:
 
             self.formula.append(clause)
 
-    def solve(self, ub, htd, solver, incremental=True, enc_type=EncType.totalizer, sb=False, clique=None, maxsat=False, tmpdir=None, external=None):
+    def solve(self, ub, htd, solver, incremental=True, enc_type=EncType.totalizer, sb=False, clique=None, maxsat=False, tmpdir=None, external=None, enc_file=None, export_cards=False):
         n = self.hypergraph.number_of_nodes()
         m = self.hypergraph.number_of_edges()
         self._init_vars(htd)
@@ -274,19 +275,33 @@ class HtdSatEncoding:
             # TODO: Case when UB is not a ubound for ghtw...
             # Maxsat
             ub = min(ub, m-1)
-            tots = self._encode_cardinality(ub, m, n)
-            maxsat_clauses = WCNF()
-            for x in range(1, ub+1):
-                var = self.pool.id(f"cards_{x}")
-                maxsat_clauses.append([var], weight=1)
-                c_clause = []
-                for t in tots:
-                    maxsat_clauses.append([-var, -t.rhs[x]])
-                    c_clause.append(t.rhs[x])
+            maxsat_clauses = WCNF() if not export_cards else CNF()
+            if not export_cards:
+                tots = self._encode_cardinality(ub, m, n)
+
+                for x in range(1, ub+1):
+                    var = self.pool.id(f"cards_{x}")
+                    maxsat_clauses.append([var], weight=1)
+                    c_clause = []
+                    for t in tots:
+                        maxsat_clauses.append([-var, -t.rhs[x]])
+                        c_clause.append(t.rhs[x])
+            elif enc_file is not None:
+                with open(enc_file+".cards", "w") as outp:
+                    for i in range(1, n+1):
+                        lits = [self.weight[i][ej] for ej in range(1, m + 1)]
+                        outp.write(" ".join(str(x) for x in lits))
+                        outp.write(" <= d"+ os.linesep)
+
             maxsat_clauses.extend(self.formula)
 
-            enc_file = path.join(tmpdir, f"{getpid()}.cnf")
+            export = enc_file is not None
+            if enc_file is None:
+                enc_file = path.join(tmpdir, f"{getpid()}.cnf")
             maxsat_clauses.to_file(enc_file)
+
+            if export:
+                exit(0)
 
             #p = subprocess.Popen(["bin/uwrmaxsat", "-m", enc_file], stdout=subprocess.PIPE)
             p = subprocess.Popen(["bin/maxhs", "-no-printSoln-new-format", "-printBstSoln", "-printSoln", enc_file],
